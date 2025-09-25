@@ -1,19 +1,19 @@
 # Influencer AI — Panoramica del progetto
 
-Questo repository raccoglie il materiale per costruire un flusso di lavoro "ibrido" che combina servizi cloud (Leonardo.ai) e strumenti locali basati su Stable Diffusion XL per creare e addestrare influencer virtuali. Il progetto mette a disposizione container Docker ottimizzati per GPU NVIDIA, script Python per la preparazione del dataset e dell'addestramento LoRA, oltre a documentazione di supporto.
+Questo repository raccoglie il materiale per costruire un flusso di lavoro "ibrido" che combina servizi cloud (OpenRouter) e strumenti locali basati su Stable Diffusion XL per creare e addestrare influencer virtuali. Il progetto mette a disposizione container Docker ottimizzati per GPU NVIDIA, script Python per la preparazione del dataset e dell'addestramento LoRA, oltre a documentazione di supporto.
 
 ## Contenuto principale
 
 - `ai_influencer/` – Codice della pipeline **AI Influencer — Hybrid Pro** con script, configurazioni Docker e documentazione di progetto.
   - `docker/` – Dockerfile e `docker-compose.yaml` per avviare i container `tools`, `comfyui` e `kohya` con supporto CUDA.
-  - `scripts/` – Script Python per pulizia immagini, generazione batch con Leonardo.ai, controllo qualità, augmenting/captioning e train LoRA.
+  - `scripts/` – Script Python per pulizia immagini, generazione batch tramite OpenRouter (`openrouter_images.py`, `openrouter_text.py`), controllo qualità, augmenting/captioning e train LoRA.
   - `README.md` – Istruzioni operative dettagliate (in italiano) per eseguire la pipeline completa.
 - Documentazione aggiuntiva (`.pdf`, `.docx`) con guide passo-passo per l'installazione in ambienti Windows/WSL, configurazione Docker e best practice operative.
 
 ## Requisiti
 
 - Docker Desktop (o Docker Engine) con supporto GPU NVIDIA abilitato.
-- Account Leonardo.ai e relativa API key per la generazione remota delle immagini.
+- Account OpenRouter e relativa API key (`OPENROUTER_API_KEY`) per le generazioni testuali e grafiche.
 - Modello **Stable Diffusion XL** base posizionato in `ai_influencer/models/base/sdxl.safetensors`.
 - Python 3.10+ all'interno del container `tools` (installato automaticamente via `pip` all'avvio grazie a `scripts/requirements.txt`).
 
@@ -30,7 +30,7 @@ Questo repository raccoglie il materiale per costruire un flusso di lavoro "ibri
    docker exec -it ai_influencer_tools bash
    python3 scripts/prepare_dataset.py --in data/input_raw --out data/cleaned --do_rembg --do_facecrop
    ```
-4. Esporta la variabile `LEONARDO_API_KEY` e lancia la generazione remota tramite `scripts/leonardo_batch.py`.
+4. Esporta la variabile `OPENROUTER_API_KEY` e lancia gli script di generazione batch (`scripts/openrouter_images.py`, `scripts/openrouter_text.py`).
 5. Esegui controllo qualità e augment/caption con gli script dedicati.
 6. Avvia l'addestramento LoRA nel container `kohya`:
    ```bash
@@ -46,7 +46,7 @@ ai_influencer/
 ├── data/
 │   ├── input_raw/          # immagini di partenza
 │   ├── cleaned/            # dataset pulito
-│   ├── synth_leonardo/     # batch generati da Leonardo.ai
+│   ├── synth_openrouter/   # batch generati da OpenRouter
 │   ├── qc_passed/          # immagini che superano il controllo qualità
 │   └── augment/            # dataset finale per il training
 ├── models/
