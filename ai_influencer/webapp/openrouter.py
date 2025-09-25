@@ -4,7 +4,10 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+
 from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 
 import httpx
 
@@ -23,11 +26,17 @@ class OpenRouterClient:
         base_url: str | None = None,
         timeout: float = 120.0,
         models_ttl: float = 300.0,
+
+
+        client: httpx.AsyncClient | None = None,
+        clock: Callable[[], float] | None = None,
+        main
     ) -> None:
         self._api_key = api_key or os.getenv("OPENROUTER_API_KEY")
         self._base_url = base_url or os.getenv(
             "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
         )
+
         self._timeout = timeout
         self._models_ttl = models_ttl
         self._model_cache: Tuple[float, List[Dict[str, Any]]] | None = None
@@ -36,6 +45,22 @@ class OpenRouterClient:
 
     async def close(self) -> None:
         await self._client.aclose()
+
+        self._models_ttl = models_ttl
+        self._model_cache: Tuple[float, List[Dict[str, Any]]] | None = None
+        self._clock = clock or time.monotonic
+        if client is None:
+            self._client = httpx.AsyncClient(timeout=timeout)
+            self._owns_client = True
+        else:
+            self._client = client
+            self._owns_client = False
+        self._lock = asyncio.Lock()
+
+    async def close(self) -> None:
+        if self._owns_client:
+            await self._client.aclose()
+        main
 
     async def __aenter__(self) -> "OpenRouterClient":
         return self
@@ -58,7 +83,11 @@ class OpenRouterClient:
         """Return cached OpenRouter models when possible."""
 
         async with self._lock:
+ codex/fix-python3-command-not-found-error-jhqsca
             now = time.monotonic()
+
+            now = self._clock()
+            main
             if self._model_cache and now - self._model_cache[0] < self._models_ttl:
                 return self._model_cache[1]
 
