@@ -34,37 +34,15 @@ Pipeline per generare un dataset (da 2 foto iniziali a ~100+ immagini), verifica
 
    Ricorda di esportare `OPENROUTER_API_KEY` nel tuo ambiente (o file `.env`) prima di avviare il servizio.
 
-5. Esegui la suite di test automatizzati prima di sviluppare nuove funzionalità (approccio TDD/CI):
-   ```bash
-   pip install -r ../requirements-dev.txt
-   pytest
-   python -m compileall webapp
-   ```
-   I test convalidano il client OpenRouter asincrono e le utility di supporto; mantieni la suite verde aggiungendo casi per ogni nuovo comportamento introdotto. Lo stesso set di comandi viene eseguito automaticamente dalla pipeline CI su GitHub Actions.
-
-6. Entra nel container `tools` e lancia pulizia:
    ```bash
    docker exec -it ai_influencer_tools bash
    python3 scripts/prepare_dataset.py --in data/input_raw --out data/cleaned --do_rembg --do_facecrop
    ```
-7. Generazione testi creativi (storyboard/script/caption seed) con OpenRouter LLM:
    ```bash
    export OPENROUTER_API_KEY=YOUR_KEY
    python3 scripts/openrouter_text.py --prompt_bank scripts/prompt_bank.yaml --out data/text/storyboard.json
    ```
-8. Genera immagini con l'API Images di OpenRouter (scegli il modello, es. `stabilityai/sdxl` o `black-forest-labs/flux`):
-   ```bash
-   python3 scripts/openrouter_images.py --prompt_bank scripts/prompt_bank.yaml --out data/synth_openrouter --model stabilityai/sdxl
-   ```
-9. Controllo qualità:
-   ```bash
-   python3 scripts/qc_face_sim.py --ref data/cleaned --cand data/synth_openrouter --out data/qc_passed --minsim 0.34
-   ```
-10. Augment + caption:
-   ```bash
-   python3 scripts/augment_and_caption.py --in data/qc_passed --out data/augment --captions data/captions --num_aug 1 --meta data/synth_openrouter/manifest.json
-   ```
-11. Addestra LoRA (metti SDXL in `models/base/`):
+
    ```bash
    docker exec -it kohya bash -lc "bash /workspace/scripts/train_lora.sh"
    ```

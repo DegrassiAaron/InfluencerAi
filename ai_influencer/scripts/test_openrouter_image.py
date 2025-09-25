@@ -74,14 +74,30 @@ def main() -> None:
             "Unexpected response Content-Type: %s", content_type or "<missing>"
         )
         logger.error("First 400 characters of body: %s", text[:400])
+        main
+        print(
+            "Unexpected response Content-Type:",
+            content_type or "<missing>",
+        )
+        print("First 400 characters of body:")
+        print(text[:400])
+        main
+
         sys.exit(1)
 
     try:
         data = response.json()
     except (json.JSONDecodeError, requests.exceptions.JSONDecodeError):
+        codex/fix-python3-command-not-found-error-jhqsca
+        codex/fix-python3-command-not-found-error-jhqsca
+        codex/fix-python3-command-not-found-error-depckr
+        main
         logger.exception(
             "Unable to decode JSON response. First 400 characters: %s", text[:400]
         )
+        print("Unable to decode JSON response. First 400 characters:")
+        print(text[:400])
+        main
         sys.exit(1)
     record = (data.get("data") or [{}])[0]
 
