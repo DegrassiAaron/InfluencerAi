@@ -70,12 +70,19 @@ def main() -> None:
 
     content_type = response.headers.get("Content-Type", "")
     if "json" not in content_type:
+        codex/fix-python3-command-not-found-error-jhqsca
+        codex/fix-python3-command-not-found-error-jhqsca
+
         codex/fix-python3-command-not-found-error-depckr
+        main
         logger.error(
             "Unexpected response Content-Type: %s", content_type or "<missing>"
         )
         logger.error("First 400 characters of body: %s", text[:400])
+        codex/fix-python3-command-not-found-error-jhqsca
 
+
+        main
         print(
             "Unexpected response Content-Type:",
             content_type or "<missing>",
@@ -88,7 +95,10 @@ def main() -> None:
     try:
         data = response.json()
     except (json.JSONDecodeError, requests.exceptions.JSONDecodeError):
+        codex/fix-python3-command-not-found-error-jhqsca
+        codex/fix-python3-command-not-found-error-jhqsca
         codex/fix-python3-command-not-found-error-depckr
+        main
         logger.exception(
             "Unable to decode JSON response. First 400 characters: %s", text[:400]
         )
