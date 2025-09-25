@@ -11,6 +11,7 @@ services:
     volumes:
       - ../data:/workspace/data
       - ../scripts:/workspace/scripts
+      - ../scripts:/scripts
     command: >
       bash -lc "
       apt-get update &&
