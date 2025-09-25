@@ -59,6 +59,18 @@ ai_influencer/
 
 Le linee guida per contribuire, il codice di condotta e le policy di sicurezza sono disponibili all'interno di `ai_influencer/CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` e `SECURITY.md`.
 
+## CI/CD
+
+Il repository include una pipeline GitHub Actions (`.github/workflows/ci.yml`) che esegue automaticamente i test Pytest e la compilazione dei moduli web ad ogni push o pull request. Per replicare lo stesso flusso in locale:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+python -m compileall ai_influencer/webapp
+```
+
+Mantieni la pipeline verde aggiungendo nuovi test ogni volta che introduci funzionalità o correzioni.
+
 ## Licenza
 
 Il progetto è distribuito secondo i termini della licenza riportata in `ai_influencer/LICENSE`.

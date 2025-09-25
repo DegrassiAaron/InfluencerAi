@@ -70,18 +70,10 @@ def main() -> None:
 
     content_type = response.headers.get("Content-Type", "")
     if "json" not in content_type:
-        codex/fix-python3-command-not-found-error-jhqsca
-        codex/fix-python3-command-not-found-error-jhqsca
-
-        codex/fix-python3-command-not-found-error-depckr
-        main
         logger.error(
             "Unexpected response Content-Type: %s", content_type or "<missing>"
         )
         logger.error("First 400 characters of body: %s", text[:400])
-        codex/fix-python3-command-not-found-error-jhqsca
-
-
         main
         print(
             "Unexpected response Content-Type:",
@@ -90,6 +82,7 @@ def main() -> None:
         print("First 400 characters of body:")
         print(text[:400])
         main
+
         sys.exit(1)
 
     try:
