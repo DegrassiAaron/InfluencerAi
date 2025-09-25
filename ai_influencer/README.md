@@ -13,6 +13,10 @@ Pipeline per generare un dataset (da 2 foto iniziali a ~100+ immagini), verifica
    ```bash
    docker compose -f docker/docker-compose.yaml up -d
    ```
+   Su Windows puoi usare anche lo script PowerShell incluso:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\start_machine.ps1
+   ```
 3. (Opzionale) Avvia l'interfaccia grafica locale:
    ```bash
    python3 scripts/gui_app.py
@@ -45,6 +49,15 @@ Pipeline per generare un dataset (da 2 foto iniziali a ~100+ immagini), verifica
    ```bash
    docker exec -it kohya bash -lc "bash /workspace/scripts/train_lora.sh"
    ```
+
+### Script PowerShell per Windows
+- `scripts/start_machine.ps1` avvia i container Docker Compose preconfigurati. Puoi forzare la ricreazione dei container con il flag `-Recreate` oppure indicare un file alternativo con `-ComposeFile "percorso\al\docker-compose.yaml"`.
+- `scripts/stop_machine.ps1` arresta e pulisce i container (usa `-RemoveVolumes` per eliminare anche i volumi associati).
+
+Esempio di arresto completo:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\stop_machine.ps1 -RemoveVolumes
+```
 
 ## Note
 - `openrouter_text.py` e `openrouter_images.py` sono scheletri: aggiorna modello/parametri secondo la documentazione ufficiale OpenRouter.
