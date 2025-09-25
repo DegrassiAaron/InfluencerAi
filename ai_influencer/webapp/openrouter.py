@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+from typing import Any, Dict, List, Optional, Tuple
+
 import httpx
 
 
@@ -18,18 +20,29 @@ class OpenRouterClient:
         self,
         *,
         api_key: Optional[str] = None,
-        base_url: str | None = None,
+        base_url: Optional[str] = None,
         timeout: float = 120.0,
         models_ttl: float = 300.0,
+        client: Optional[httpx.AsyncClient] = None,
+        transport: Optional[httpx.AsyncBaseTransport] = None,
     ) -> None:
         self._api_key = api_key or os.getenv("OPENROUTER_API_KEY")
         self._base_url = base_url or os.getenv(
             "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
         )
+        self._models_ttl = models_ttl
+        self._model_cache: Optional[Tuple[float, List[Dict[str, Any]]]] = None
         self._lock = asyncio.Lock()
 
+        if client is not None:
+            self._client = client
+            self._owns_client = False
+        else:
+            self._client = httpx.AsyncClient(timeout=timeout, transport=transport)
+            self._owns_client = True
+
     async def close(self) -> None:
-        if self._owns_client:
+        if getattr(self, "_owns_client", False):
             await self._client.aclose()
     async def __aenter__(self) -> "OpenRouterClient":
         return self
@@ -52,7 +65,11 @@ class OpenRouterClient:
         """Return cached OpenRouter models when possible."""
 
         async with self._lock:
-            if self._model_cache and now - self._model_cache[0] < self._models_ttl:
+            now = time.monotonic()
+            if (
+                self._model_cache is not None
+                and now - self._model_cache[0] < self._models_ttl
+            ):
                 return self._model_cache[1]
 
             response = await self._client.get(
@@ -63,7 +80,9 @@ class OpenRouterClient:
                     f"Unable to fetch models: {response.status_code} {response.text[:200]}"
                 )
             data = response.json()
-            models: List[Dict[str, Any]] = data.get("data", []) if isinstance(data, dict) else []
+            models: List[Dict[str, Any]] = (
+                data.get("data", []) if isinstance(data, dict) else []
+            )
             self._model_cache = (now, models)
             return models
 
