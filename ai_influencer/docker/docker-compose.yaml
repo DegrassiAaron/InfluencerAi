@@ -7,10 +7,10 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - DEBIAN_FRONTEND=noninteractive
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    working_dir: /workspace
     volumes:
       - ../data:/workspace/data
       - ../scripts:/workspace/scripts
-    working_dir: /workspace
     command: >
       bash -lc "
       apt-get update &&
