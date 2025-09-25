@@ -1,0 +1,50 @@
+services:
+  tools:
+    image: nvidia/cuda:12.1.0-devel-ubuntu22.04
+    container_name: ai_influencer_tools
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - DEBIAN_FRONTEND=noninteractive
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    volumes:
+      - ../data:/workspace/data
+      - ../scripts:/workspace/scripts
+    working_dir: /workspace
+    command: >
+      bash -lc "
+      apt-get update &&
+      apt-get install -y python3-pip git &&
+      pip3 install --no-cache-dir -r /workspace/scripts/requirements.txt &&
+      tail -f /dev/null
+      "
+
+  comfyui:
+    build:
+      context: ..
+      dockerfile: docker/comfyui.Dockerfile
+    container_name: comfyui_local
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    ports: ["8188:8188"]
+    volumes:
+      - ../models:/opt/ComfyUI/models
+      - ../workflows/comfyui:/opt/ComfyUI/user/default
+      - ../data:/data
+
+
+  kohya:
+    build:
+      context: ..
+      dockerfile: docker/kohya.Dockerfile
+    container_name: kohya_local
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ../data:/workspace/data
+      - ../models:/workspace/models
+      - ../scripts:/workspace/scripts
+    working_dir: /workspace
+    command: bash -lc "tail -f /dev/null"

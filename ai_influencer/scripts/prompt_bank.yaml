@@ -1,0 +1,36 @@
+persona: >
+  Italian lifestyle creator, realistic skin texture, natural makeup,
+  expressive eyes, friendly confidence, photoreal.
+
+negatives: >
+  deformed, extra fingers, extra limbs, lowres, blurry, watermark, text, logo
+
+scenes:
+  - sunlit café near window, bokeh street outside
+  - cobblestone alley at blue hour, soft practicals
+  - modern living room with plants, daylight
+  - seaside promenade, golden hour
+  - studio backdrop color block, editorial look
+  - neon-lit street, night rain reflections
+
+lighting:
+  - soft diffused key from window, warm fill, gentle rim
+  - golden hour rim light, soft fill
+  - overcast softbox feel, even skin tone
+  - neon bounce magenta/cyan, slight haze
+
+poses:
+  - looking over shoulder, half-smile
+  - walking mid-step, candid
+  - seated, elbows on table, playful gaze
+  - hands in pockets, relaxed stance
+  - tying hair, casual
+
+outfits:
+  - white linen shirt + jeans
+  - athleisure set monochrome
+  - black turtleneck + trench coat
+  - summer floral dress
+  - streetwear oversized hoodie
+
+focals: [35mm, 50mm, 85mm]

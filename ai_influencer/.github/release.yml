@@ -1,0 +1,8 @@
+changelog:
+  categories:
+    - title: 🚀 Novità
+      labels: [enhancement]
+    - title: 🐛 Fix
+      labels: [bug]
+    - title: 🧰 Varie
+      labels: [chore, docs]

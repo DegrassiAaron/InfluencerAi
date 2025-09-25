@@ -1,0 +1,140 @@
+{
+  "name": "AI Influencer - Hybrid Pro Dataset",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "ai-influencer-hybrid",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "python3 scripts/prepare_dataset.py --in data/input_raw --out data/cleaned --do_rembg --do_facecrop"
+      },
+      "name": "Docker Exec - Clean",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        500,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "command": "python3 scripts/leonardo_batch.py --prompt_bank scripts/prompt_bank.yaml --out data/synth_leonardo"
+      },
+      "name": "Leonardo Batch",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "command": "python3 scripts/qc_face_sim.py --ref data/cleaned --cand data/synth_leonardo --out data/qc_passed --minsim 0.34"
+      },
+      "name": "QC Face",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "python3 scripts/augment_and_caption.py --in data/qc_passed --out data/augment --captions data/captions --num_aug 1 --meta data/synth_leonardo/manifest.json"
+      },
+      "name": "Augment+Caption",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "bash scripts/train_lora.sh"
+      },
+      "name": "Train LoRA",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1400,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Docker Exec - Clean",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Leonardo Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Docker Exec - Clean": {
+      "main": [
+        [
+          {
+            "node": "QC Face",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leonardo Batch": {
+      "main": [
+        [
+          {
+            "node": "QC Face",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QC Face": {
+      "main": [
+        [
+          {
+            "node": "Augment+Caption",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Augment+Caption": {
+      "main": [
+        [
+          {
+            "node": "Train LoRA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

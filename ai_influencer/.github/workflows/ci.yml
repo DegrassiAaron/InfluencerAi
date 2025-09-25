@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Quick Python checks
+        run: |
+          python -m compileall scripts || true
+
+      - name: Build docker (kohya)
+        run: |
+          docker build -f docker/kohya.Dockerfile -t docker-kohya .
+        if: ${{ hashFiles('docker/kohya.Dockerfile') != '' }}
+
+      - name: Build docker (comfyui)
+        run: |
+          docker build -f docker/comfyui.Dockerfile -t docker-comfyui .
+        if: ${{ hashFiles('docker/comfyui.Dockerfile') != '' }}

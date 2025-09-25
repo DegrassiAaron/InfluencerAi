@@ -1,0 +1,11 @@
+.git
+.gitignore
+docker/.env
+.env
+*.zip
+data
+models
+venv
+.venv
+__pycache__
+*.pyc
