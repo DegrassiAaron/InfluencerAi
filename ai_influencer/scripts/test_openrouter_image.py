@@ -20,6 +20,7 @@ def main() -> None:
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
+        "Accept": "application/json",
         "HTTP-Referer": "http://localhost",
         "X-Title": "ai-influencer",
     }
@@ -42,7 +43,22 @@ def main() -> None:
     if not response.ok:
         sys.exit(1)
 
-    data = response.json()
+    content_type = response.headers.get("Content-Type", "")
+    if "json" not in content_type:
+        print(
+            "Unexpected response Content-Type:",
+            content_type or "<missing>",
+        )
+        print("First 400 characters of body:")
+        print(text[:400])
+        sys.exit(1)
+
+    try:
+        data = response.json()
+    except (json.JSONDecodeError, requests.exceptions.JSONDecodeError):
+        print("Unable to decode JSON response. First 400 characters:")
+        print(text[:400])
+        sys.exit(1)
     record = (data.get("data") or [{}])[0]
 
     outdir = pathlib.Path("/workspace/data/synth_openrouter")
