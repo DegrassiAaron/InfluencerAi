@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import os
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -11,7 +12,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, Field, field_validator, model_validator
 
 from ai_influencer.webapp.openrouter import (
     OpenRouterClient,
@@ -62,6 +63,40 @@ class InfluencerLookupRequest(BaseModel):
     )
 
 
+def _mask_secret(secret: Optional[str]) -> Optional[str]:
+    if not secret:
+        return None
+    secret = secret.strip()
+    if len(secret) <= 4:
+        return "*" * len(secret)
+    return "*" * (len(secret) - 4) + secret[-4:]
+
+
+class OpenRouterConfigRequest(BaseModel):
+    api_key: Optional[str] = Field(
+        default=None, description="OpenRouter API key", min_length=1
+    )
+    base_url: Optional[AnyHttpUrl] = Field(
+        default=None, description="Optional OpenRouter base URL"
+    )
+
+    @field_validator("api_key")
+    @classmethod
+    def _strip_api_key(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("API key must not be empty")
+        return stripped
+
+    @model_validator(mode="after")
+    def _ensure_payload(self) -> "OpenRouterConfigRequest":
+        if self.api_key is None and self.base_url is None:
+            raise ValueError("Provide at least one value to update")
+        return self
+
+
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -70,12 +105,23 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
-    return TEMPLATES.TemplateResponse("index.html", {"request": request})
+    return TEMPLATES.TemplateResponse(
+        "index.html", {"request": request, "active_nav": "home"}
+    )
 
 
 @app.get("/influencer", response_class=HTMLResponse)
 async def influencer_view(request: Request) -> HTMLResponse:
-    return TEMPLATES.TemplateResponse("influencer.html", {"request": request})
+    return TEMPLATES.TemplateResponse(
+        "influencer.html", {"request": request, "active_nav": "influencer"}
+    )
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_view(request: Request) -> HTMLResponse:
+    return TEMPLATES.TemplateResponse(
+        "settings.html", {"request": request, "active_nav": "settings"}
+    )
 
 
 @app.get("/api/models")
@@ -85,6 +131,32 @@ async def list_models(client: OpenRouterClient = Depends(get_client)) -> JSONRes
     finally:
         await client.close()
     return JSONResponse({"models": summarize_models(models)})
+
+
+@app.get("/api/config/openrouter")
+async def get_openrouter_config() -> Dict[str, Any]:
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    base_url = os.environ.get("OPENROUTER_BASE_URL")
+    return {
+        "has_api_key": bool(api_key),
+        "api_key_preview": _mask_secret(api_key),
+        "base_url": base_url or None,
+    }
+
+
+@app.post("/api/config/openrouter")
+async def update_openrouter_config(payload: OpenRouterConfigRequest) -> Dict[str, Any]:
+    updated: Dict[str, Any] = {}
+    if payload.api_key is not None:
+        os.environ["OPENROUTER_API_KEY"] = payload.api_key
+        updated["api_key"] = True
+    if payload.base_url is not None:
+        os.environ["OPENROUTER_BASE_URL"] = str(payload.base_url)
+        updated["base_url"] = str(payload.base_url)
+
+    refreshed = await get_openrouter_config()
+    refreshed["updated"] = updated
+    return refreshed
 
 
 @app.post("/api/generate/text")

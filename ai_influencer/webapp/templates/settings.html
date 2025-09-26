@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Impostazioni - AI Influencer Control Hub</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="header-bar">
+        <h1>Impostazioni</h1>
+        <nav class="app-nav">
+          <a href="/"{% if active_nav == "home" %} aria-current="page"{% endif %}
+            >Generazione contenuti</a
+          >
+          <a href="/influencer"{% if active_nav == "influencer" %} aria-current="page"{% endif %}
+            >Analisi influencer</a
+          >
+          <a href="/settings"{% if active_nav == "settings" %} aria-current="page"{% endif %}
+            >Impostazioni</a
+          >
+        </nav>
+      </div>
+      <p>
+        Gestisci la chiave API e l'endpoint di OpenRouter utilizzati dall'applicazione.
+        Le modifiche vengono salvate immediatamente nell'ambiente di esecuzione.
+      </p>
+    </header>
+
+    <main class="settings-layout">
+      <section class="card settings-card">
+        <h2>Configurazione OpenRouter</h2>
+        <p class="settings-description">
+          Inserisci la chiave API fornita da OpenRouter e, se necessario, un endpoint
+          personalizzato. La chiave viene mostrata in forma mascherata dopo il salvataggio.
+        </p>
+        <div id="config-status" class="status-message empty">
+          Nessuna chiave configurata.
+        </div>
+        <form id="openrouter-form" class="form settings-form" autocomplete="off">
+          <label>
+            Chiave API
+            <input
+              type="password"
+              id="openrouter-api-key"
+              name="api_key"
+              placeholder="sk-..."
+              autocomplete="off"
+            />
+            <span class="input-hint">
+              Il valore inviato sovrascrive quello attualmente configurato.
+            </span>
+          </label>
+          <label>
+            Endpoint personalizzato (facoltativo)
+            <input
+              type="url"
+              id="openrouter-base-url"
+              name="base_url"
+              placeholder="https://openrouter.ai/api/v1"
+              autocomplete="off"
+            />
+            <span class="input-hint">
+              Lascia vuoto per mantenere l'endpoint predefinito di OpenRouter.
+            </span>
+          </label>
+          <div class="settings-actions">
+            <button type="submit">Salva configurazione</button>
+            <button type="button" id="clear-settings" class="button-secondary">
+              Pulisci form
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script src="/static/settings.js" type="module"></script>
+  </body>
+</html>
