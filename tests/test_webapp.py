@@ -1,5 +1,7 @@
 """Tests for the FastAPI web application endpoints."""
 
+import base64
+import pathlib
 import sys
 from pathlib import Path
 from typing import Optional
@@ -9,21 +11,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from fastapi.testclient import TestClient
 
 from ai_influencer.webapp.main import app, get_client
-from ai_influencer.webapp.openrouter import OpenRouterError
-
-
-
-import pathlib
-from pathlib import Path
-import sys
-
-from fastapi.testclient import TestClient
-
-
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
 from ai_influencer.webapp.openrouter import OpenRouterError, summarize_models
 
 
@@ -112,6 +99,25 @@ class StubTextClient:
         self.closed = True
 
 
+class StubImageClient:
+    """Minimal stub implementing the OpenRouter image client interface."""
+
+    def __init__(self, *, result=None, error: Exception | None = None) -> None:
+        self._result = result
+        self._error = error
+        self.closed = False
+        self.calls: list[dict] = []
+
+    async def generate_image(self, **kwargs):
+        self.calls.append(kwargs)
+        if self._error is not None:
+            raise self._error
+        return self._result
+
+    async def close(self) -> None:
+        self.closed = True
+
+
 def _clear_overrides() -> None:
     app.dependency_overrides.pop(get_client, None)
 
@@ -142,6 +148,94 @@ def override_client(client_stub: StubVideoClient) -> None:
 
 def reset_overrides() -> None:
     app.dependency_overrides.pop(get_client, None)
+
+
+def test_generate_image_returns_remote_url_and_closes_client():
+    stub_client = StubImageClient(
+        result={"data": [{"url": "https://cdn.example.com/image.png"}]}
+    )
+
+    async def _override() -> StubImageClient:
+        return stub_client
+
+    app.dependency_overrides[get_client] = _override
+    try:
+        response = client.post(
+            "/api/generate/image",
+            json={"model": "stub", "prompt": "draw"},
+        )
+    finally:
+        reset_overrides()
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "image": "https://cdn.example.com/image.png",
+        "is_remote": True,
+    }
+    assert stub_client.closed is True
+
+
+def test_generate_image_returns_inline_base64_and_closes_client():
+    inline = base64.b64encode(b"pixel").decode()
+    stub_client = StubImageClient(result={"data": [{"b64_json": inline}]})
+
+    async def _override() -> StubImageClient:
+        return stub_client
+
+    app.dependency_overrides[get_client] = _override
+    try:
+        response = client.post(
+            "/api/generate/image",
+            json={"model": "stub", "prompt": "draw"},
+        )
+    finally:
+        reset_overrides()
+
+    assert response.status_code == 200
+    assert response.json() == {"image": inline, "is_remote": False}
+    assert stub_client.closed is True
+
+
+def test_generate_image_handles_missing_payload_and_closes_client():
+    stub_client = StubImageClient(result={})
+
+    async def _override() -> StubImageClient:
+        return stub_client
+
+    app.dependency_overrides[get_client] = _override
+    try:
+        response = client.post(
+            "/api/generate/image",
+            json={"model": "stub", "prompt": "draw"},
+        )
+    finally:
+        reset_overrides()
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Unexpected image payload"}
+    assert stub_client.closed is True
+
+
+def test_generate_image_handles_invalid_base64_and_closes_client():
+    stub_client = StubImageClient(
+        result={"data": [{"b64_json": "not-base64??"}]}
+    )
+
+    async def _override() -> StubImageClient:
+        return stub_client
+
+    app.dependency_overrides[get_client] = _override
+    try:
+        response = client.post(
+            "/api/generate/image",
+            json={"model": "stub", "prompt": "draw"},
+        )
+    finally:
+        reset_overrides()
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Invalid image encoding"}
+    assert stub_client.closed is True
 
 
 class StubVideoClient:
