@@ -11,8 +11,15 @@
       <div class="header-bar">
         <h1>AI Influencer Control Hub</h1>
         <nav class="app-nav">
-          <a href="/">Generazione contenuti</a>
-          <a href="/influencer">Analisi influencer</a>
+          <a href="/"{% if active_nav == "home" %} aria-current="page"{% endif %}
+            >Generazione contenuti</a
+          >
+          <a href="/influencer"{% if active_nav == "influencer" %} aria-current="page"{% endif %}
+            >Analisi influencer</a
+          >
+          <a href="/settings"{% if active_nav == "settings" %} aria-current="page"{% endif %}
+            >Impostazioni</a
+          >
         </nav>
       </div>
       <p>

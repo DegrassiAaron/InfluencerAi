@@ -287,6 +287,7 @@ textarea {
   border-radius: 12px;
   background: rgba(13, 17, 23, 0.6);
   border: 1px solid rgba(240, 246, 252, 0.08);
+  white-space: pre-line;
 }
 
 .status-message.loading {
@@ -436,6 +437,53 @@ textarea {
 .toast-error {
   border-color: rgba(255, 123, 114, 0.6);
   color: #ff7b72;
+}
+
+.settings-layout {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.settings-card {
+  gap: 1.25rem;
+}
+
+.settings-description {
+  margin: 0;
+  color: rgba(240, 246, 252, 0.75);
+}
+
+.settings-form .input-hint {
+  font-size: 0.8rem;
+  color: rgba(240, 246, 252, 0.6);
+}
+
+.settings-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.button-secondary {
+  background: transparent;
+  color: inherit;
+  border: 1px solid rgba(240, 246, 252, 0.35);
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s ease, border 0.2s ease, color 0.2s ease;
+}
+
+.button-secondary:hover,
+.button-secondary:focus-visible {
+  background: rgba(240, 246, 252, 0.12);
+  border-color: rgba(240, 246, 252, 0.5);
+  outline: none;
 }
 
 @media (max-width: 900px) {
