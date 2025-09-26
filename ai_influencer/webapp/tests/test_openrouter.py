@@ -45,16 +45,22 @@ class OpenRouterClientTests(unittest.IsolatedAsyncioTestCase):
             )
             first = await client.list_models()
             second = await client.list_models()
+            self.assertIs(client._clock, clock)
             self.assertEqual(first, [{"id": "model-1"}])
             self.assertEqual(second, first)
             self.assertEqual(len(calls), 1)
             self.assertEqual(calls[0].headers["Accept"], "application/json")
 
-            clock.advance(10.0)
+            clock.advance(4.9)
             third = await client.list_models()
+            self.assertEqual(len(calls), 1)
+
+            clock.advance(0.2)
+            fourth = await client.list_models()
 
         self.assertEqual(len(calls), 2)
-        self.assertEqual(third, [{"id": "model-2"}])
+        self.assertEqual(third, [{"id": "model-1"}])
+        self.assertEqual(fourth, [{"id": "model-2"}])
 
     async def test_generate_text_flattens_chunked_messages(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:

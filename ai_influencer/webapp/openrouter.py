@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import httpx
 
@@ -25,6 +25,7 @@ class OpenRouterClient:
         models_ttl: float = 300.0,
         client: Optional[httpx.AsyncClient] = None,
         transport: Optional[httpx.AsyncBaseTransport] = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._api_key = api_key or os.getenv("OPENROUTER_API_KEY")
         self._base_url = base_url or os.getenv(
@@ -33,6 +34,7 @@ class OpenRouterClient:
         self._models_ttl = models_ttl
         self._model_cache: Optional[Tuple[float, List[Dict[str, Any]]]] = None
         self._lock = asyncio.Lock()
+        self._clock = clock
 
         if client is not None:
             self._client = client
@@ -65,7 +67,7 @@ class OpenRouterClient:
         """Return cached OpenRouter models when possible."""
 
         async with self._lock:
-            now = time.monotonic()
+            now = self._clock()
             if (
                 self._model_cache is not None
                 and now - self._model_cache[0] < self._models_ttl
