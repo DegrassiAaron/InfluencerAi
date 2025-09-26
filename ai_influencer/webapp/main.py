@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from .openrouter import (
+from ai_influencer.webapp.openrouter import (
     OpenRouterClient,
     OpenRouterError,
     summarize_models,
