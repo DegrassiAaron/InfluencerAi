@@ -1,6 +1,5 @@
 """Tests for the FastAPI web application endpoints."""
 
-
 import sys
 from pathlib import Path
 from typing import Optional
@@ -11,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from ai_influencer.webapp.main import app, get_client
 from ai_influencer.webapp.openrouter import OpenRouterError
+
 
 
 import pathlib
@@ -113,6 +113,34 @@ class StubTextClient:
 
 
 def _clear_overrides() -> None:
+    app.dependency_overrides.pop(get_client, None)
+
+
+class StubVideoClient:
+    """Minimal stub implementing the OpenRouter video client interface."""
+
+    def __init__(self, result=None, error: Optional[Exception] = None):
+        self._result = result
+        self._error = error
+        self.closed = False
+
+    async def generate_video(self, **kwargs):
+        if self._error is not None:
+            raise self._error
+        return self._result
+
+    async def close(self):
+        self.closed = True
+
+
+def override_client(client_stub: StubVideoClient) -> None:
+    async def _get_client() -> StubVideoClient:
+        return client_stub
+
+    app.dependency_overrides[get_client] = _get_client
+
+
+def reset_overrides() -> None:
     app.dependency_overrides.pop(get_client, None)
 
 
@@ -256,7 +284,7 @@ def test_generate_video_propagates_openrouter_errors():
     assert response.status_code == 502
     assert response.json() == {"detail": "backend unavailable"}
     assert stub.closed is True
-=======
+
 def test_generate_text_uses_stubbed_client_and_closes() -> None:
     stub = StubTextClient(result="expected text")
 
@@ -298,4 +326,3 @@ def test_generate_text_returns_502_on_openrouter_error() -> None:
         assert stub.closed is True
     finally:
         _clear_overrides()
-
