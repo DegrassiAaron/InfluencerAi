@@ -110,6 +110,8 @@ python3 scripts/openrouter_images.py \
 ```
 `--model` accetta sia l'ID completo OpenRouter sia i seguenti alias pronti all'uso:
 
+> Consulta anche [README_OPENROUTER.md](README_OPENROUTER.md) per il catalogo completo degli alias e le tariffe aggiornate.
+
 | Alias | ID completo | Scheda OpenRouter |
 | ----- | ----------- | ----------------- |
 | `sdxl` | `stabilityai/sdxl` | <https://openrouter.ai/models/stabilityai/sdxl> |
