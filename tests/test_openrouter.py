@@ -11,6 +11,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from ai_influencer.scripts.openrouter_models import MODEL_PRESETS, resolve_model_alias
 from ai_influencer.webapp.openrouter import (
     OpenRouterClient,
     OpenRouterError,
@@ -170,3 +171,12 @@ def test_summarize_models_orders_by_name() -> None:
     summary = summarize_models(models)
 
     assert [item["id"] for item in summary] == ["alpha", "beta"]
+
+
+def test_resolve_model_alias_is_case_insensitive() -> None:
+    assert resolve_model_alias("SDXL") == MODEL_PRESETS["sdxl"]
+
+
+def test_resolve_model_alias_passthrough_for_custom_ids() -> None:
+    custom = "my-org/custom-model"
+    assert resolve_model_alias(custom) == custom

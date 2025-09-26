@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-import os, json, time, argparse, base64, requests, hashlib, yaml, pathlib, re
+import os, json, time, argparse, base64, requests, hashlib, yaml, pathlib
+
+from ai_influencer.scripts.openrouter_models import (
+    MODEL_PRESETS_HELP,
+    resolve_model_alias,
+)
 
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 IMG_URL = "https://openrouter.ai/api/v1/images"       # [Unverified] endpoint immagini
@@ -13,7 +18,7 @@ def gen_text(prompt, model="openai/gpt-4o-mini"):
     r = requests.post(TXT_URL, headers=h, json=p, timeout=120); r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]
 
-def gen_image(prompt, model="stability-ai/stable-diffusion-xl-base-1.0", width=1024, height=1024, outdir="data/synth_openrouter"):
+def gen_image(prompt, model="stabilityai/sdxl", width=1024, height=1024, outdir="data/synth_openrouter"):
     h = {"Authorization": f"Bearer {API_KEY}"}
     p = {"model": model, "prompt": prompt, "width": width, "height": height}
     r = requests.post(IMG_URL, headers=h, json=p, timeout=300); r.raise_for_status()
@@ -46,7 +51,14 @@ def main():
     ap.add_argument("--prompt_bank", required=True)
     ap.add_argument("--out", default="data/synth_openrouter")
     ap.add_argument("--per_scene", type=int, default=12)
-    ap.add_argument("--img_model", default="stability-ai/stable-diffusion-xl-base-1.0")
+    ap.add_argument(
+        "--img_model",
+        default="sdxl",
+        help=(
+            "Modello immagini OpenRouter. Preset alias disponibili: "
+            f"{MODEL_PRESETS_HELP}."
+        ),
+    )
     ap.add_argument("--negatives", default="deformed, extra fingers, extra limbs, lowres, blurry, watermark, text, logo")
     ap.add_argument("--width", type=int, default=1024)
     ap.add_argument("--height", type=int, default=1024)
@@ -62,6 +74,10 @@ def main():
     outfits = cfg["outfits"]
     focals  = cfg["focals"]
 
+    model_id = resolve_model_alias(args.img_model)
+    if model_id != args.img_model:
+        print(f"[openrouter] alias '{args.img_model}' risolto in '{model_id}'")
+
     manifest = {}
     for scene in scenes:
         for i in range(args.per_scene):
@@ -69,7 +85,7 @@ def main():
             focal, light = focals[i % len(focals)], lights[i % len(lights)]
             prompt = build_prompt(cfg["persona"], scene, pose, outfit, light, focal, args.negatives)
             try:
-                fn = gen_image(prompt, model=args.img_model, width=args.width, height=args.height, outdir=args.out)
+                fn = gen_image(prompt, model=model_id, width=args.width, height=args.height, outdir=args.out)
                 base = pathlib.Path(fn).stem
                 manifest[base] = dict(scene=scene, pose=pose, outfit=outfit, focal=focal, lighting=light, prompt=prompt)
                 print("[IMG]", fn)
