@@ -131,7 +131,12 @@ function renderModels(models) {
         ? model.capabilities.join(', ')
         : 'Sconosciute';
       clone.querySelector('.model-capabilities').textContent = `Capacità: ${capabilities}`;
-      clone.querySelector('.model-pricing').textContent = formatPricing(model.pricing);
+      const pricingElement = clone.querySelector('.model-pricing');
+      if (model.pricing_display) {
+        pricingElement.textContent = `Costo stimato: ${model.pricing_display}`;
+      } else {
+        pricingElement.textContent = formatPricing(model.pricing);
+      }
       clone.querySelectorAll('button[data-target]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const target = document.querySelector(`#${btn.dataset.target}`);

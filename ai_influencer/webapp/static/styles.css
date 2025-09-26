@@ -143,6 +143,7 @@ body {
 
 .model-pricing {
   font-style: italic;
+  min-height: 1.2rem;
 }
 
 .model-actions {

@@ -55,7 +55,10 @@ def test_list_models_returns_summarized_payload_and_closes_client():
         app.dependency_overrides.pop(get_client, None)
 
     assert response.status_code == 200
-    assert response.json() == {"models": summarize_models(stub_client.models)}
+    payload = response.json()
+    assert payload == {"models": summarize_models(stub_client.models)}
+    pricing_displays = [model["pricing_display"] for model in payload["models"]]
+    assert pricing_displays == ["Output: $0.001", "Video: $0.01"]
     assert stub_client.close_called is True
 
 
