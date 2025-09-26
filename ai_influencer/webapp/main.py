@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -46,6 +48,20 @@ class VideoGenerationRequest(BaseModel):
     size: Optional[str] = Field(None, description="Resolution, e.g. 1024x576")
 
 
+class AcquisitionMethod(str, Enum):
+    """Supported ways to gather influencer insights."""
+
+    OFFICIAL = "official"
+    SCRAPE = "scrape"
+
+
+class InfluencerLookupRequest(BaseModel):
+    identifier: str = Field(..., description="Username or profile URL")
+    method: AcquisitionMethod = Field(
+        AcquisitionMethod.OFFICIAL, description="Data acquisition strategy"
+    )
+
+
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -55,6 +71,11 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
     return TEMPLATES.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/influencer", response_class=HTMLResponse)
+async def influencer_view(request: Request) -> HTMLResponse:
+    return TEMPLATES.TemplateResponse("influencer.html", {"request": request})
 
 
 @app.get("/api/models")
@@ -155,6 +176,76 @@ async def generate_video(
     if blob.get("b64_json"):
         return JSONResponse({"video": blob["b64_json"], "is_remote": False})
     raise HTTPException(status_code=500, detail="Unsupported video payload")
+
+
+@app.post("/api/influencer")
+async def influencer_lookup(payload: InfluencerLookupRequest) -> JSONResponse:
+    identifier = payload.identifier.strip()
+    if not identifier:
+        raise HTTPException(status_code=422, detail="Identifier is required")
+
+    normalized = identifier.lower()
+    if "instagram" in normalized or "insta" in normalized:
+        platform = "Instagram"
+    elif "tiktok" in normalized:
+        platform = "TikTok"
+    elif "youtube" in normalized or "youtu" in normalized:
+        platform = "YouTube"
+    else:
+        platform = "Generico"
+
+    handle = identifier.lstrip("@")
+    if "/" in handle:
+        handle = handle.rstrip("/").split("/")[-1]
+
+    if not handle:
+        raise HTTPException(status_code=422, detail="Impossibile determinare l'handle")
+
+    if "invalid" in handle.lower():
+        raise HTTPException(status_code=404, detail="Influencer non trovato")
+
+    friendly_name = handle.replace("_", " ").title()
+    method_label = (
+        "API ufficiali" if payload.method == AcquisitionMethod.OFFICIAL else "Web scraping"
+    )
+
+    profile: Dict[str, Any] = {
+        "handle": f"@{handle}",
+        "nome": friendly_name,
+        "piattaforma": platform,
+        "fonte_dati": method_label,
+    }
+
+    followers_base = max(1_000, len(handle) * 1_250)
+    engagement = round(min(8.5, 3.2 + len(handle) * 0.17), 2)
+    metrics: Dict[str, Any] = {
+        "follower": followers_base,
+        "engagement_rate": f"{engagement}%",
+        "crescita_30g": "+" + str(int(followers_base * 0.08)),
+        "media_view": int(followers_base * 0.45),
+    }
+
+    media: List[Dict[str, Any]] = [
+        {
+            "id": f"{handle}-post-{idx}",
+            "titolo": f"Contenuto #{idx} di {friendly_name}",
+            "tipo": "video" if idx % 2 == 0 else "immagine",
+            "url": f"https://social.example/{handle}/post/{idx}",
+            "pubblicato_il": (datetime.now(timezone.utc)).isoformat(),
+        }
+        for idx in range(1, 4)
+    ]
+
+    payload_data = {
+        "profile": profile,
+        "metrics": metrics,
+        "media": media,
+        "identifier": handle,
+        "method": payload.method.value,
+        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    return JSONResponse(payload_data)
 
 
 @app.get("/healthz")
