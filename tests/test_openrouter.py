@@ -83,6 +83,21 @@ def test_list_models_refreshes_after_ttl_expiry() -> None:
     asyncio.run(scenario())
 
 
+def test_list_models_raises_on_failure_status() -> None:
+    transport = make_transport({"/models": httpx.Response(500, json={"error": "boom"})})
+
+    async def scenario() -> None:
+        client = OpenRouterClient(transport=transport)
+
+        try:
+            with pytest.raises(OpenRouterError):
+                await client.list_models()
+        finally:
+            await client.close()
+
+    asyncio.run(scenario())
+
+
 def test_generate_text_supports_chunked_content() -> None:
     transport = make_transport(
         {
@@ -146,6 +161,36 @@ def test_generate_image_returns_payload() -> None:
             await client.close()
 
         assert response == payload
+
+    asyncio.run(scenario())
+
+
+def test_generate_image_raises_on_failure_status() -> None:
+    transport = make_transport({"/images": httpx.Response(500, json={"error": "boom"})})
+
+    async def scenario() -> None:
+        client = OpenRouterClient(transport=transport)
+
+        try:
+            with pytest.raises(OpenRouterError):
+                await client.generate_image(model="demo", prompt="hi")
+        finally:
+            await client.close()
+
+    asyncio.run(scenario())
+
+
+def test_generate_video_raises_on_failure_status() -> None:
+    transport = make_transport({"/videos": httpx.Response(500, json={"error": "boom"})})
+
+    async def scenario() -> None:
+        client = OpenRouterClient(transport=transport)
+
+        try:
+            with pytest.raises(OpenRouterError):
+                await client.generate_video(model="demo", prompt="hi")
+        finally:
+            await client.close()
 
     asyncio.run(scenario())
 
