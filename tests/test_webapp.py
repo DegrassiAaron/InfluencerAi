@@ -7,6 +7,7 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fastapi.testclient import TestClient
+import pytest
 
 from ai_influencer.webapp.main import app, get_client
 from ai_influencer.webapp.openrouter import OpenRouterError
@@ -198,6 +199,76 @@ def test_influencer_lookup_returns_enriched_media():
         assert "success_score" in item
         assert "pubblicato_il" in item
         assert "transcript" in item
+
+
+@pytest.mark.parametrize("identifier", ["", "   "])
+def test_influencer_lookup_requires_identifier(identifier: str) -> None:
+    response = client.post(
+        "/api/influencer",
+        json={"identifier": identifier, "method": "official"},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Identifier is required"}
+
+
+def test_influencer_lookup_normalizes_handle_from_urls() -> None:
+    response = client.post(
+        "/api/influencer",
+        json={
+            "identifier": "https://instagram.com/Cool.Creator/",
+            "method": "official",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["identifier"] == "Cool.Creator"
+    assert payload["profile"]["handle"] == "@Cool.Creator"
+    assert payload["profile"]["piattaforma"] == "Instagram"
+
+
+def test_influencer_lookup_returns_not_found_for_invalid_handles() -> None:
+    response = client.post(
+        "/api/influencer",
+        json={"identifier": "@invalid_creator", "method": "official"},
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Influencer non trovato"}
+
+
+@pytest.mark.parametrize(
+    "identifier,expected_platform",
+    [
+        ("@InstaIcon", "Instagram"),
+        ("https://www.tiktok.com/@dancewave", "TikTok"),
+        ("youtube.com/@visionary", "YouTube"),
+        ("emerging_artist", "Generico"),
+    ],
+)
+def test_influencer_lookup_sets_platform_and_metrics_for_scrape_method(
+    identifier: str, expected_platform: str
+) -> None:
+    response = client.post(
+        "/api/influencer",
+        json={"identifier": identifier, "method": "scrape"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    profile = payload["profile"]
+    metrics = payload["metrics"]
+
+    assert profile["piattaforma"] == expected_platform
+    assert profile["fonte_dati"] == "Web scraping"
+    assert payload["method"] == "scrape"
+    assert profile["handle"].startswith("@")
+    assert {"follower", "engagement_rate", "crescita_30g", "media_view"}.issubset(
+        metrics.keys()
+    )
 
 
 def test_generate_video_returns_remote_url():
