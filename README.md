@@ -103,11 +103,24 @@ Crea batch coerenti con le scene e i controlli creativi:
 ```bash
 python3 scripts/openrouter_images.py \
   --prompt_bank scripts/prompt_bank.yaml \
-  --model stabilityai/sdxl \
+  --model sdxl \
   --out data/synth_openrouter \
   --per_scene 12 \
   --size 1024x1024
 ```
+`--model` accetta sia l'ID completo OpenRouter sia i seguenti alias pronti all'uso:
+
+| Alias | ID completo | Scheda OpenRouter |
+| ----- | ----------- | ----------------- |
+| `sdxl` | `stabilityai/sdxl` | <https://openrouter.ai/models/stabilityai/sdxl> |
+| `sdxl-turbo` | `stabilityai/sdxl-turbo` | <https://openrouter.ai/models/stabilityai/sdxl-turbo> |
+| `flux` | `black-forest-labs/flux-1.1-pro` | <https://openrouter.ai/models/black-forest-labs/flux-1.1-pro> |
+| `flux-dev` | `black-forest-labs/flux-dev` | <https://openrouter.ai/models/black-forest-labs/flux-dev> |
+| `playground-v25` | `playgroundai/playground-v2.5` | <https://openrouter.ai/models/playgroundai/playground-v2.5> |
+| `sdxl-lightning` | `luma-photon/stable-diffusion-xl-lightning` | <https://openrouter.ai/models/luma-photon/stable-diffusion-xl-lightning> |
+
+Puoi anche fornire un ID non presente nella tabella (ad esempio un modello privato) e verrà usato direttamente.
+
 Il manifest `manifest.json` associa ad ogni immagine scena, pose, outfit, setup luci e prompt.
 
 ### 4. Controllo qualità
@@ -181,7 +194,6 @@ ai_influencer/
     └── comfyui/          # workflow personalizzati ComfyUI
 ```
 
-## Interfacce alternative
 - **GUI desktop** (`scripts/gui_app.py`): fornisce una finestra Tkinter con wizard per API key, preparazione dataset, generazione testo/immagini, QC e augment. Ogni pulsante invoca gli script CLI corrispondenti mostrando i log in tempo reale.
 - **Workflow n8n** (`n8n/flow.json`): definisce un webhook che esegue sequenzialmente `prepare_dataset.py`, `openrouter_batch.py` e step collegati all'interno del container Docker; il nodo finale "Train LoRA" accetta un campo JSON `base_model` per scegliere il checkpoint da passare allo script.
 - **Script PowerShell** (`scripts/start_machine.ps1`, `scripts/stop_machine.ps1`): facilitano l'avvio/arresto dei container su Windows.
