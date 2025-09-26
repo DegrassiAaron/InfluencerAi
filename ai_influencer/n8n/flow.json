@@ -64,7 +64,7 @@
     },
     {
       "parameters": {
-        "command": "bash scripts/train_lora.sh"
+        "command": "={{\"bash scripts/train_lora.sh\" + ($json[\"base_model\"] ? \" --base-model \\\"\" + $json[\"base_model\"] + \"\\\"\" : \"\")}}"
       },
       "name": "Train LoRA",
       "type": "n8n-nodes-base.executeCommand",

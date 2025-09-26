@@ -13,6 +13,7 @@ Questo documento accompagna la cartella `ai_influencer/` e descrive nel dettagli
   - [4. Controllo qualità del dataset](#4-controllo-qualità-del-dataset)
   - [5. Augment + captioning](#5-augment--captioning)
   - [6. Addestramento LoRA SDXL](#6-addestramento-lora-sdxl)
+- [Gestione dei modelli base](#gestione-dei-modelli-base)
 - [Control Hub web](#control-hub-web)
 - [GUI desktop](#gui-desktop)
 - [Automazione via n8n](#automazione-via-n8n)
@@ -132,14 +133,21 @@ python3 scripts/augment_and_caption.py \
 - Mantiene l'originale e genera versioni `*_augX.jpg` a 95% qualità JPEG.
 - Produce caption descrittive utilizzando scena/luce/outfit dal manifest (fallback su valori predefiniti).
 
+## Gestione dei modelli base
+Salva uno o più checkpoint SDXL in `ai_influencer/models/base/` (estensione `.safetensors`). Puoi usare nomi diversi per distinguerli, es.: `sdxl.safetensors`, `dreamshaper_xl.safetensors`, `realvis_xl.safetensors`.
+
 ### 6. Addestramento LoRA SDXL
-Dal container `kohya_local`:
+Dal container `kohya_local` puoi specificare il modello da usare con il flag `--base-model`:
 ```bash
-docker exec -it kohya_local bash -lc "bash /workspace/scripts/train_lora.sh"
+docker exec -it kohya_local bash -lc "bash /workspace/scripts/train_lora.sh --base-model /workspace/models/base/dreamshaper_xl.safetensors"
 ```
-- Lancia `accelerate` con `sd-scripts/train_network.py` (dim 32, alpha 16, risoluzione 1024).
-- `TRAIN_DIR=/workspace/data/augment` e `OUT_DIR=/workspace/models/lora` configurati nello script.
-- Il checkpoint LoRA viene salvato come `models/lora/influencer_lora.safetensors`.
+In alternativa esporta prima la variabile d'ambiente e invoca lo script normalmente:
+```bash
+docker exec -it kohya_local bash -lc "BASE_MODEL=/workspace/models/base/dreamshaper_xl.safetensors bash /workspace/scripts/train_lora.sh"
+```
+- Se non viene passato alcun valore, lo script usa `/workspace/models/base/sdxl.safetensors`.
+- Viene lanciato `accelerate` con `sd-scripts/train_network.py` (dim 32, alpha 16, risoluzione 1024) e gli output finiscono in `models/lora/`.
+- Log iniziale: `[train_lora] Modello base selezionato: ...` (utile come smoke test rapido per verificare che il parametro sia propagato).
 
 ## Control Hub web
 Il servizio FastAPI (`webapp/main.py`) gira nel container `ai_influencer_webapp` e offre:
@@ -169,7 +177,10 @@ python3 scripts/gui_app.py
 1. Riceve la richiesta HTTP.
 2. Esegue `python3 scripts/prepare_dataset.py ...` nel container tramite nodo `executeCommand`.
 3. Avvia `python3 scripts/openrouter_batch.py ...` per popolare `data/synth_openrouter`.
-4. (Ulteriori nodi possono essere collegati per QC/augment).
+4. Lancia `bash scripts/train_lora.sh`.
+5. (Ulteriori nodi possono essere collegati per QC/augment).
+
+Il nodo "Train LoRA" accetta nel payload JSON un campo opzionale `base_model` per inoltrare il percorso al flag `--base-model`; in assenza del campo viene usato il default `/workspace/models/base/sdxl.safetensors`.
 
 Importa il file in n8n, aggiorna percorsi/comandi in base alla tua infrastruttura Docker e proteggi il webhook con credenziali.
 
