@@ -19,20 +19,22 @@ Questo repository raccoglie il materiale per costruire un flusso di lavoro "ibri
 
 ## Avvio rapido
 
-1. Copia due immagini di riferimento del tuo personaggio in `ai_influencer/data/input_raw/`.
-2. Avvia l'infrastruttura locale:
+1. Avvia Docker Desktop/Engine e assicurati che il modello base **Stable Diffusion XL** sia presente in `ai_influencer/models/base/sdxl.safetensors`.
+2. Popola il dataset iniziale copiando almeno due immagini di riferimento del tuo personaggio in `ai_influencer/data/input_raw/`.
+3. Avvia il servizio web Lovable, che funge da interfaccia per orchestrare le generazioni di prompt e immagini (richiede `OPENROUTER_API_KEY`):
    ```bash
-   cd ai_influencer
-   docker compose -f docker/docker-compose.yaml up -d
+   docker compose -f ai_influencer/docker/docker-compose.yaml up -d webapp
+   # in alternativa usa "up -d" senza servizio per alzare l'intero stack (webapp, tools, comfyui, kohya)
    ```
-3. Entra nel container `ai_influencer_tools` per preparare il dataset:
+   Raggiungi il pannello su `http://localhost:8000` per configurare i job e verificare lo stato dei container.
+4. Esporta `OPENROUTER_API_KEY` (necessaria sia per Lovable sia per gli script CLI) ed esegui dal container `ai_influencer_tools` la preparazione del dataset:
    ```bash
    docker exec -it ai_influencer_tools bash
+   export OPENROUTER_API_KEY=...  # disponibile anche via docker compose env
    python3 scripts/prepare_dataset.py --in data/input_raw --out data/cleaned --do_rembg --do_facecrop
    ```
-4. Esporta la variabile `OPENROUTER_API_KEY` e lancia gli script di generazione batch (`scripts/openrouter_images.py`, `scripts/openrouter_text.py`).
-5. Esegui controllo qualità e augment/caption con gli script dedicati.
-6. Avvia l'addestramento LoRA nel container `kohya`:
+5. Dal medesimo container lancia gli script di generazione batch (`scripts/openrouter_images.py`, `scripts/openrouter_text.py`) seguendo i workflow impostati via Lovable.
+6. Completa il controllo qualità, augment/caption e avvia l'addestramento LoRA nel container `kohya`:
    ```bash
    docker exec -it kohya bash -lc "bash /workspace/scripts/train_lora.sh"
    ```
