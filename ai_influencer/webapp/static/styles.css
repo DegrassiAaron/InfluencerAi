@@ -134,6 +134,17 @@ body {
   color: rgba(240, 246, 252, 0.7);
 }
 
+.model-capabilities,
+.model-pricing {
+  font-size: 0.9rem;
+  color: rgba(240, 246, 252, 0.78);
+  line-height: 1.4;
+}
+
+.model-pricing {
+  font-style: italic;
+}
+
 .model-actions {
   display: flex;
   gap: 0.5rem;

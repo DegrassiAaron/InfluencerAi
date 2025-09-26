@@ -11,6 +11,94 @@ const videoOutput = document.querySelector('#video-output');
 
 let modelsCache = [];
 
+const PRICING_LABELS = {
+  input: 'Input',
+  output: 'Output',
+  image: 'Immagini',
+  image_generation: 'Generazione immagini',
+  video: 'Video',
+  video_generation: 'Generazione video',
+  audio: 'Audio',
+  audio_generation: 'Generazione audio',
+};
+
+function formatPriceAmount(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) {
+    return null;
+  }
+  const abs = Math.abs(amount);
+  let fractionDigits = 2;
+  if (abs > 0 && abs < 0.01) {
+    fractionDigits = 6;
+  } else if (abs < 0.1) {
+    fractionDigits = 4;
+  }
+  let formatted = amount.toFixed(fractionDigits);
+  formatted = formatted.replace(/0+$/, '').replace(/\.$/, '');
+  return `$${formatted || '0'}`;
+}
+
+function formatPricingValue(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'number') {
+    return formatPriceAmount(value);
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const numeric = formatPriceAmount(trimmed);
+    return numeric || trimmed;
+  }
+  return null;
+}
+
+function humanizeKey(key) {
+  if (!key) return '';
+  if (PRICING_LABELS[key]) return PRICING_LABELS[key];
+  return key
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatPricing(pricing) {
+  if (!pricing || typeof pricing !== 'object') {
+    return 'Prezzi non disponibili';
+  }
+
+  const entries = [];
+
+  const visit = (key, value, prefix = '') => {
+    if (value === null || value === undefined) {
+      return;
+    }
+
+    const label = prefix ? `${prefix} ${humanizeKey(key)}` : humanizeKey(key);
+
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const nested = Object.entries(value);
+      if (!nested.length) return;
+      nested.forEach(([nestedKey, nestedValue]) => visit(nestedKey, nestedValue, label));
+      return;
+    }
+
+    const formatted = formatPricingValue(value);
+    if (formatted) {
+      entries.push(`${label}: ${formatted}`);
+    }
+  };
+
+  Object.entries(pricing).forEach(([key, value]) => visit(key, value));
+
+  if (!entries.length) {
+    return 'Prezzi non disponibili';
+  }
+
+  return entries.join(' • ');
+}
+
 async function fetchModels() {
   modelsList.innerHTML = '<p class="loading">Caricamento modelli...</p>';
   try {
@@ -43,6 +131,7 @@ function renderModels(models) {
         ? model.capabilities.join(', ')
         : 'Sconosciute';
       clone.querySelector('.model-capabilities').textContent = `Capacità: ${capabilities}`;
+      clone.querySelector('.model-pricing').textContent = formatPricing(model.pricing);
       clone.querySelectorAll('button[data-target]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const target = document.querySelector(`#${btn.dataset.target}`);
