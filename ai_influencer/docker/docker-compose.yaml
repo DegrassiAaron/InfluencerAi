@@ -60,13 +60,13 @@ services:
       - OPENROUTER_APP_TITLE=AI Influencer Control Hub
     working_dir: /workspace
     volumes:
-      - ../:/workspace
+      - ../../:/workspace
     command: >
       bash -lc "
       apt-get update && \
       apt-get install -y --no-install-recommends build-essential python3-dev && \
       rm -rf /var/lib/apt/lists/* && \
-      pip install --no-cache-dir -r webapp/requirements.txt && \
+      pip install --no-cache-dir -r ai_influencer/webapp/requirements.txt && \
       uvicorn ai_influencer.webapp.main:app --host 0.0.0.0 --port 8000
       "
     ports:
