@@ -9,6 +9,112 @@ const methodLabels = {
   scrape: "Web scraping",
 };
 
+const downloadMimeFallback = "application/octet-stream";
+
+function getFirstAvailable(item, keys) {
+  return keys.map((key) => item?.[key]).find((value) => value != null && value !== "");
+}
+
+async function downloadFromSource(source, filename, mimeType = downloadMimeFallback) {
+  if (!source) return false;
+
+  let blob;
+  try {
+    if (source instanceof Blob) {
+      blob = source;
+    } else if (source instanceof ArrayBuffer) {
+      blob = new Blob([source], { type: mimeType });
+    } else if (ArrayBuffer.isView(source)) {
+      const { buffer, byteOffset, byteLength } = source;
+      const sliced = buffer.slice(byteOffset, byteOffset + byteLength);
+      blob = new Blob([sliced], { type: mimeType });
+    } else if (typeof source !== "string") {
+      blob = new Blob([JSON.stringify(source)], { type: mimeType });
+    } else if (/^https?:\/\//i.test(source)) {
+      const response = await fetch(source);
+      blob = await response.blob();
+    } else if (source.startsWith("data:")) {
+      const response = await fetch(source);
+      blob = await response.blob();
+    } else {
+      const cleaned = source.replace(/\s+/g, "");
+      const byteCharacters = atob(cleaned);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i += 1) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      blob = new Blob([byteArray], { type: mimeType });
+    }
+  } catch (error) {
+    console.error("Errore durante il recupero del contenuto da scaricare", error);
+    return false;
+  }
+
+  try {
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+    return true;
+  } catch (error) {
+    console.error("Errore durante il download del file", error);
+    return false;
+  }
+}
+
+function createIconButton(icon, label, title) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "media-action";
+  button.title = title || label;
+
+  const iconSpan = document.createElement("span");
+  iconSpan.className = "media-action-icon";
+  iconSpan.textContent = icon;
+
+  const labelSpan = document.createElement("span");
+  labelSpan.className = "media-action-label";
+  labelSpan.textContent = label;
+
+  button.append(iconSpan, labelSpan);
+  return button;
+}
+
+function ensureToastContainer() {
+  let toastContainer = document.querySelector(".toast-container");
+  if (!toastContainer) {
+    toastContainer = document.createElement("div");
+    toastContainer.className = "toast-container";
+    document.body.appendChild(toastContainer);
+  }
+  return toastContainer;
+}
+
+function showToast(message, state = "info") {
+  const container = ensureToastContainer();
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${state}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  requestAnimationFrame(() => {
+    toast.classList.add("visible");
+  });
+  setTimeout(() => {
+    toast.classList.remove("visible");
+    setTimeout(() => {
+      toast.remove();
+      if (!container.childElementCount) {
+        container.remove();
+      }
+    }, 250);
+  }, 2000);
+}
+
 function setStatus(message, state = "info") {
   if (!statusEl) return;
   statusEl.textContent = message;
@@ -106,6 +212,13 @@ function renderMedia(container, media) {
       card.appendChild(published);
     }
 
+    const textContent = getFirstAvailable(item, ["testo", "descrizione", "caption", "text"]);
+    if (textContent) {
+      const textParagraph = document.createElement("p");
+      textParagraph.textContent = textContent;
+      card.appendChild(textParagraph);
+    }
+
     if (item.url) {
       const link = document.createElement("a");
       link.href = item.url;
@@ -113,6 +226,105 @@ function renderMedia(container, media) {
       link.rel = "noopener noreferrer";
       link.textContent = item.url;
       card.appendChild(link);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "media-actions";
+
+    const mainImageSource = getFirstAvailable(item, [
+      "immagine_principale",
+      "immagine",
+      "media",
+      "image",
+      "image_url",
+      "media_url",
+    ]);
+    if (mainImageSource) {
+      const downloadMainBtn = createIconButton("⬇️", "Scarica immagine", "Scarica immagine principale");
+      downloadMainBtn.addEventListener("click", async () => {
+        const success = await downloadFromSource(mainImageSource, `${item.id || "media"}.jpg`, "image/jpeg");
+        showToast(success ? "Immagine scaricata." : "Impossibile scaricare l'immagine.", success ? "success" : "error");
+      });
+      actions.appendChild(downloadMainBtn);
+    }
+
+    const thumbnailSource = getFirstAvailable(item, [
+      "thumbnail",
+      "miniatura",
+      "anteprima",
+      "thumbnail_url",
+      "preview",
+    ]);
+    if (thumbnailSource) {
+      const downloadThumbBtn = createIconButton("🖼️", "Scarica thumbnail", "Scarica immagine di anteprima");
+      downloadThumbBtn.addEventListener("click", async () => {
+        const success = await downloadFromSource(thumbnailSource, `${item.id || "media"}-thumbnail.jpg`, "image/jpeg");
+        showToast(success ? "Thumbnail scaricata." : "Impossibile scaricare la thumbnail.", success ? "success" : "error");
+      });
+      actions.appendChild(downloadThumbBtn);
+    }
+
+    if (textContent) {
+      const copyTextBtn = createIconButton("📋", "Copia testo", "Copia il testo associato");
+      copyTextBtn.addEventListener("click", async () => {
+        try {
+          if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(textContent);
+          } else {
+            const textarea = document.createElement("textarea");
+            textarea.value = textContent;
+            textarea.setAttribute("readonly", "true");
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.appendChild(textarea);
+            textarea.select();
+            const copied = document.execCommand("copy");
+            textarea.remove();
+            if (!copied) {
+              throw new Error("Fallback copy failed");
+            }
+          }
+          showToast("Testo copiato negli appunti.", "success");
+        } catch (error) {
+          console.error("Errore durante la copia del testo", error);
+          showToast("Impossibile copiare il testo.", "error");
+        }
+      });
+      actions.appendChild(copyTextBtn);
+    }
+
+    const transcript = getFirstAvailable(item, [
+      "trascrizione",
+      "trascrizione_testuale",
+      "transcription",
+      "captions",
+    ]);
+    if (transcript) {
+      const downloadTranscriptBtn = createIconButton("📝", "Scarica trascrizione", "Scarica trascrizione in formato testo");
+      downloadTranscriptBtn.addEventListener("click", async () => {
+        const blob = new Blob([transcript], { type: "text/plain;charset=utf-8" });
+        const success = await downloadFromSource(blob, `${item.id || "media"}-trascrizione.txt`, "text/plain;charset=utf-8");
+        showToast(success ? "Trascrizione scaricata." : "Impossibile scaricare la trascrizione.", success ? "success" : "error");
+      });
+      actions.appendChild(downloadTranscriptBtn);
+    }
+
+    const linkSource = getFirstAvailable(item, ["url", "link", "permalink"]);
+    if (linkSource) {
+      const openLinkBtn = createIconButton("🔗", "Apri link", "Apri il contenuto in una nuova scheda");
+      openLinkBtn.addEventListener("click", () => {
+        const opened = window.open(linkSource, "_blank", "noopener,noreferrer");
+        if (opened) {
+          showToast("Link aperto in una nuova scheda.", "success");
+        } else {
+          showToast("Impossibile aprire il link.", "error");
+        }
+      });
+      actions.appendChild(openLinkBtn);
+    }
+
+    if (actions.childElementCount > 0) {
+      card.appendChild(actions);
     }
 
     grid.appendChild(card);
