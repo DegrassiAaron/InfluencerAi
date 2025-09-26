@@ -8,6 +8,30 @@ from ai_influencer.webapp.main import app
 client = TestClient(app)
 
 
+def test_homepage_serves_html():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "AI Influencer Control Hub" in response.text
+
+
+def test_influencer_page_serves_html():
+    response = client.get("/influencer")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Analisi Influencer" in response.text
+
+
+def test_health_check():
+    response = client.get("/healthz")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.json() == {"status": "ok"}
+
+
 def test_influencer_lookup_returns_enriched_media():
     response = client.post(
         "/api/influencer",
