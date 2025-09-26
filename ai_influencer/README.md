@@ -83,13 +83,26 @@ Due opzioni:
   ```bash
   python3 scripts/openrouter_images.py \
     --prompt_bank scripts/prompt_bank.yaml \
-    --model stabilityai/sdxl \
+    --model sdxl \
     --out data/synth_openrouter \
     --per_scene 12 \
     --size 1024x1024 \
     --sleep 3
   ```
-- **Versione compatta (`openrouter_batch.py`)** – usa lo stesso YAML ma espone meno flag; utile nelle automazioni n8n.
+- **Versione compatta (`openrouter_batch.py`)** – usa lo stesso YAML ma espone meno flag; utile nelle automazioni n8n. Anche qui `--img_model` accetta alias o ID completi.
+
+Alias consigliati (`MODEL_PRESETS`) utilizzabili sia via CLI sia dalla GUI:
+
+| Alias | ID completo | Scheda OpenRouter |
+| ----- | ----------- | ----------------- |
+| `sdxl` | `stabilityai/sdxl` | <https://openrouter.ai/models/stabilityai/sdxl> |
+| `sdxl-turbo` | `stabilityai/sdxl-turbo` | <https://openrouter.ai/models/stabilityai/sdxl-turbo> |
+| `flux` | `black-forest-labs/flux-1.1-pro` | <https://openrouter.ai/models/black-forest-labs/flux-1.1-pro> |
+| `flux-dev` | `black-forest-labs/flux-dev` | <https://openrouter.ai/models/black-forest-labs/flux-dev> |
+| `playground-v25` | `playgroundai/playground-v2.5` | <https://openrouter.ai/models/playgroundai/playground-v2.5> |
+| `sdxl-lightning` | `luma-photon/stable-diffusion-xl-lightning` | <https://openrouter.ai/models/luma-photon/stable-diffusion-xl-lightning> |
+
+Inserendo un ID non presente nella tabella il valore viene usato direttamente, utile per modelli custom o privati.
 
 Ogni immagine viene salvata come PNG con nome hash e metadati registrati in `manifest.json`.
 
@@ -142,7 +155,7 @@ Assicurati di esportare `OPENROUTER_API_KEY` e personalizza `OPENROUTER_APP_TITL
 
 ## GUI desktop
 `scripts/gui_app.py` fornisce un'interfaccia Tkinter con:
-- sezioni configurabili per cartelle input/output, API key, modelli testo/immagine, soglie QC;
+- sezioni configurabili per cartelle input/output, API key, modelli testo/immagine, soglie QC (la combobox dei modelli immagine propone gli alias `MODEL_PRESETS` ma resta modificabile per ID custom);
 - bottoni che invocano gli script CLI e mostrano i log in streaming (via `subprocess.Popen` + coda thread-safe);
 - pulsante "Interrompi" per terminare il processo corrente e pulsante "Pulisci log".
 
