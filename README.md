@@ -14,6 +14,7 @@
   - [4. Controllo qualità](#4-controllo-qualità)
   - [5. Augment e captioning](#5-augment-e-captioning)
   - [6. Training LoRA](#6-training-lora)
+- [Gestione dei checkpoint base](#gestione-dei-checkpoint-base)
 - [Control Hub web](#control-hub-web)
 - [Struttura delle cartelle dati](#struttura-delle-cartelle-dati)
 - [Interfacce alternative](#interfacce-alternative)
@@ -133,12 +134,26 @@ python3 scripts/augment_and_caption.py \
 ```
 Ogni immagine originale viene duplicata con trasformazioni leggere (albumentations) e accompagnata dalla relativa caption `.txt`.
 
-### 6. Training LoRA
-Dal container `kohya_local` avvia lo script di training:
+## Gestione dei checkpoint base
+Copia uno o più checkpoint SDXL (o modelli compatibili) in `ai_influencer/models/base/` mantenendo l'estensione `.safetensors`:
 ```bash
-docker exec -it kohya_local bash -lc "bash /workspace/scripts/train_lora.sh"
+cp ~/Downloads/sdxl_base_1.0.safetensors ai_influencer/models/base/sdxl.safetensors
+cp ~/models/dreamshaperXL10.safetensors ai_influencer/models/base/dreamshaper_xl.safetensors
 ```
-Il comando richiama `accelerate` per eseguire `sd-scripts/train_network.py` con risoluzione 1024², salvando gli output in `models/lora/`.
+Lo script `train_lora.sh` utilizza per default `/workspace/models/base/sdxl.safetensors`, ma puoi sostituire il percorso con il flag `--base-model` oppure impostando la variabile d'ambiente `BASE_MODEL`.
+
+### 6. Training LoRA
+Dal container `kohya_local` avvia lo script di training scegliendo il modello base desiderato:
+```bash
+docker exec -it kohya_local bash -lc "bash /workspace/scripts/train_lora.sh --base-model /workspace/models/base/dreamshaper_xl.safetensors"
+```
+In alternativa esporta la variabile d'ambiente prima dell'esecuzione:
+```bash
+docker exec -it kohya_local bash -lc "BASE_MODEL=/workspace/models/base/dreamshaper_xl.safetensors bash /workspace/scripts/train_lora.sh"
+```
+Se non specifichi nulla verrà usato `/workspace/models/base/sdxl.safetensors`. Il comando richiama `accelerate` per eseguire `sd-scripts/train_network.py` con risoluzione 1024², salvando gli output in `models/lora/`.
+
+> 💡 Smoke test rapido: esegui `bash /workspace/scripts/train_lora.sh --base-model /workspace/models/base/sdxl.safetensors` e verifica nei log la riga `[train_lora] Modello base selezionato: ...` per assicurarti che il parametro venga propagato correttamente.
 
 ## Control Hub web
 Il servizio `ai_influencer_webapp` espone un pannello su [http://localhost:8000](http://localhost:8000) per:
@@ -160,7 +175,7 @@ ai_influencer/
 │   ├── augment/          # dataset finale per il training
 │   └── captions/         # caption .txt allineate alle immagini
 ├── models/
-│   ├── base/             # modello SDXL di partenza
+│   ├── base/             # modelli base SDXL (più checkpoint .safetensors)
 │   └── lora/             # checkpoint LoRA addestrati
 └── workflows/
     └── comfyui/          # workflow personalizzati ComfyUI
@@ -168,7 +183,7 @@ ai_influencer/
 
 ## Interfacce alternative
 - **GUI desktop** (`scripts/gui_app.py`): fornisce una finestra Tkinter con wizard per API key, preparazione dataset, generazione testo/immagini, QC e augment. Ogni pulsante invoca gli script CLI corrispondenti mostrando i log in tempo reale.
-- **Workflow n8n** (`n8n/flow.json`): definisce un webhook che esegue sequenzialmente `prepare_dataset.py`, `openrouter_batch.py` e step collegati all'interno del container Docker, utile per automazioni server-side.
+- **Workflow n8n** (`n8n/flow.json`): definisce un webhook che esegue sequenzialmente `prepare_dataset.py`, `openrouter_batch.py` e step collegati all'interno del container Docker; il nodo finale "Train LoRA" accetta un campo JSON `base_model` per scegliere il checkpoint da passare allo script.
 - **Script PowerShell** (`scripts/start_machine.ps1`, `scripts/stop_machine.ps1`): facilitano l'avvio/arresto dei container su Windows.
 
 ## Test e sviluppo
