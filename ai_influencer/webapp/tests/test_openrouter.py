@@ -149,6 +149,8 @@ class HelperFunctionsTests(unittest.TestCase):
         self.assertEqual(summary[0]["id"], "model-a")
         self.assertEqual(summary[1]["id"], "model-b")
         self.assertIn("image", summary[1]["capabilities"])
+        self.assertIsNone(summary[0]["pricing_display"])
+        self.assertEqual(summary[1]["pricing_display"], "Image Prompt: $0.1")
 
 
 if __name__ == "__main__":  # pragma: no cover

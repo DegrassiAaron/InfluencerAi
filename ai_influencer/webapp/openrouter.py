@@ -4,7 +4,9 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from decimal import Decimal, InvalidOperation
+import string
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 import httpx
 
@@ -199,6 +201,97 @@ def classify_model_capabilities(model: Dict[str, Any]) -> List[str]:
     return sorted({cap.lower() for cap in capabilities if isinstance(cap, str)})
 
 
+_PRICING_PRIORITY = {
+    "output": 0,
+    "image": 1,
+    "image_generation": 1,
+    "video": 2,
+    "video_generation": 2,
+    "input": 3,
+}
+
+
+def _format_pricing_amount(value: Any) -> Optional[str]:
+    """Return a currency string for numeric pricing values."""
+
+    if value is None:
+        return None
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if not amount.is_finite():
+        return None
+
+    abs_amount = abs(amount)
+    if abs_amount != 0 and abs_amount < Decimal("0.01"):
+        digits = 6
+    elif abs_amount < Decimal("0.1"):
+        digits = 4
+    else:
+        digits = 2
+    formatted = f"{amount:.{digits}f}".rstrip("0").rstrip(".")
+    if formatted in {"", "-"}:
+        formatted = "0"
+    return f"${formatted}"
+
+
+def _iter_pricing_entries(
+    pricing: Dict[str, Any],
+    *,
+    path: Tuple[str, ...] = (),
+) -> Iterable[Tuple[Tuple[str, ...], Any]]:
+    for key, value in pricing.items():
+        if value is None:
+            continue
+        current_path = path + (key,)
+        if isinstance(value, dict):
+            yield from _iter_pricing_entries(value, path=current_path)
+        else:
+            yield current_path, value
+
+
+def _score_pricing_path(path: Tuple[str, ...]) -> Tuple[int, int]:
+    for index, key in enumerate(path):
+        if key in _PRICING_PRIORITY:
+            return _PRICING_PRIORITY[key], index
+    return 10, len(path)
+
+
+def _humanize_pricing_path(path: Tuple[str, ...]) -> str:
+    words = [string.capwords(part.replace("_", " ")) for part in path if part]
+    return " ".join(words)
+
+
+def _build_pricing_display(pricing: Any) -> Optional[str]:
+    if not isinstance(pricing, dict) or not pricing:
+        return None
+
+    best_entry: Optional[Tuple[Tuple[int, int], Tuple[str, ...], str]] = None
+    for path, raw_value in _iter_pricing_entries(pricing):
+        formatted_value = _format_pricing_amount(raw_value)
+        if formatted_value is None:
+            if isinstance(raw_value, str):
+                formatted_value = raw_value.strip()
+            else:
+                continue
+        if not formatted_value:
+            continue
+        score = _score_pricing_path(path)
+        candidate = (score, path, formatted_value)
+        if best_entry is None or candidate < best_entry:
+            best_entry = candidate
+
+    if best_entry is None:
+        return None
+
+    _, path, value = best_entry
+    label = _humanize_pricing_path(path)
+    if not label:
+        return value
+    return f"{label}: {value}"
+
+
 def summarize_models(models: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Return a condensed list of model metadata used by the UI."""
 
@@ -209,6 +302,7 @@ def summarize_models(models: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             continue
         provider = item.get("owned_by") or item.get("organization") or ""
         capabilities = classify_model_capabilities(item)
+        pricing = item.get("pricing")
         summary.append(
             {
                 "id": model_id,
@@ -216,7 +310,8 @@ def summarize_models(models: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "provider": provider,
                 "capabilities": capabilities,
                 "context_length": item.get("context_length"),
-                "pricing": item.get("pricing"),
+                "pricing": pricing,
+                "pricing_display": _build_pricing_display(pricing),
             }
         )
     summary.sort(key=lambda x: x["name"].lower())
