@@ -225,16 +225,44 @@ async def influencer_lookup(payload: InfluencerLookupRequest) -> JSONResponse:
         "media_view": int(followers_base * 0.45),
     }
 
-    media: List[Dict[str, Any]] = [
-        {
-            "id": f"{handle}-post-{idx}",
-            "titolo": f"Contenuto #{idx} di {friendly_name}",
-            "tipo": "video" if idx % 2 == 0 else "immagine",
-            "url": f"https://social.example/{handle}/post/{idx}",
-            "pubblicato_il": (datetime.now(timezone.utc)).isoformat(),
-        }
-        for idx in range(1, 4)
-    ]
+    base_success = 87 + len(handle) * 3
+    now_iso = datetime.now(timezone.utc).isoformat()
+    media: List[Dict[str, Any]] = []
+    for position in range(1, 11):
+        media_type = "video" if position % 3 == 0 else "immagine"
+        success_score = round(base_success - (position - 1) * 4.5, 2)
+        original_url = f"https://social.example/{handle}/post/{position}"
+        image_url = f"https://cdn.social.example/{handle}/media/{position}.jpg"
+        thumbnail_url = f"{image_url}?size=thumbnail"
+        seed = f"{handle}-{position}".encode()
+        image_base64 = base64.b64encode(seed).decode()
+        transcript: Optional[str]
+        if media_type == "video":
+            transcript = (
+                f"Trascrizione simulata del contenuto #{position} di {friendly_name}."
+            )
+        else:
+            transcript = None
+
+        media.append(
+            {
+                "id": f"{handle}-top-{position}",
+                "titolo": f"Top contenuto #{position} di {friendly_name}",
+                "tipo": media_type,
+                "testo_post": (
+                    f"{friendly_name} condivide un aggiornamento di punta #{position}"
+                ),
+                "image_url": image_url,
+                "image_base64": image_base64,
+                "thumbnail_url": thumbnail_url,
+                "success_score": success_score,
+                "original_url": original_url,
+                "pubblicato_il": now_iso,
+                "transcript": transcript,
+            }
+        )
+
+    media.sort(key=lambda item: item["success_score"], reverse=True)
 
     payload_data = {
         "profile": profile,
