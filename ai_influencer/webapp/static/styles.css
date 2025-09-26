@@ -348,9 +348,94 @@ textarea {
   font-size: 0.85rem;
 }
 
+.media-item p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: rgba(240, 246, 252, 0.85);
+}
+
 .media-item a {
   color: #58a6ff;
   word-break: break-all;
+}
+
+.media-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.media-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(240, 246, 252, 0.12);
+  background: rgba(13, 17, 23, 0.6);
+  color: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease, border 0.2s ease;
+}
+
+.media-action:hover {
+  transform: translateY(-1px);
+  background: rgba(35, 134, 54, 0.2);
+  border-color: rgba(46, 160, 67, 0.5);
+}
+
+.media-action:focus-visible {
+  outline: 2px solid rgba(88, 166, 255, 0.7);
+  outline-offset: 2px;
+}
+
+.media-action-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.media-action-label {
+  white-space: nowrap;
+}
+
+.toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  display: grid;
+  gap: 0.5rem;
+  z-index: 9999;
+}
+
+.toast {
+  background: rgba(13, 17, 23, 0.85);
+  border-radius: 999px;
+  padding: 0.55rem 1rem;
+  border: 1px solid rgba(240, 246, 252, 0.12);
+  color: rgba(240, 246, 252, 0.9);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  font-size: 0.85rem;
+}
+
+.toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast-success {
+  border-color: rgba(46, 160, 67, 0.6);
+  color: #56d364;
+}
+
+.toast-error {
+  border-color: rgba(255, 123, 114, 0.6);
+  color: #ff7b72;
 }
 
 @media (max-width: 900px) {
