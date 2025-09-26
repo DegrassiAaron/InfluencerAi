@@ -46,7 +46,7 @@ Il progetto **Influencer AI** fornisce un flusso end-to-end per costruire una pe
 - **Software**: Docker Desktop (o Docker Engine) con supporto GPU attivo, Docker Compose v2, Git.
 - **Account/Asset**:
   - chiave API OpenRouter (`OPENROUTER_API_KEY`), opzionalmente endpoint personalizzato (`OPENROUTER_BASE_URL`);
-  - modello base Stable Diffusion XL copiato in `ai_influencer/models/base/sdxl.safetensors`.
+  - accesso a Hugging Face (token opzionale) per scaricare automaticamente il modello base SDXL al primo avvio.
 - **Storage**: almeno 40 GB liberi per dataset, modelli e checkpoint LoRA.
 
 ## Setup rapido
@@ -55,12 +55,11 @@ Il progetto **Influencer AI** fornisce un flusso end-to-end per costruire una pe
    git clone https://github.com/<org>/InfluencerAi.git
    cd InfluencerAi
    ```
-2. Copia il modello SDXL base in `ai_influencer/models/base/sdxl.safetensors`.
-3. Esporta la chiave OpenRouter nel terminale corrente (o aggiungila a un file `.env` richiamato da Docker Compose):
+2. Esporta la chiave OpenRouter nel terminale corrente (o aggiungila a un file `.env` richiamato da Docker Compose):
    ```bash
    export OPENROUTER_API_KEY="sk-or-..."
    ```
-4. Avvia lo stack GPU:
+3. Avvia lo stack GPU (al primo avvio scarica automaticamente ~6.5 GiB di pesi SDXL in `ai_influencer/models/base/`):
    ```bash
    docker compose -f ai_influencer/docker/docker-compose.yaml up -d
    ```

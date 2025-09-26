@@ -29,7 +29,7 @@ Questo documento accompagna la cartella `ai_influencer/` e descrive nel dettagli
 - GPU NVIDIA con driver recenti e supporto CUDA (12.x consigliato).
 - Docker Desktop/Engine con estensione NVIDIA attiva.
 - Chiave API OpenRouter (`OPENROUTER_API_KEY`). Facoltativi `OPENROUTER_BASE_URL`, `OPENROUTER_APP_TITLE`, `OPENROUTER_APP_URL`.
-- File modello `models/base/sdxl.safetensors` già presente.
+- Accesso a Hugging Face (token opzionale) per scaricare automaticamente il modello SDXL (~6.5 GiB) al primo avvio; il file verrà salvato in `models/base/sdxl.safetensors`.
 - Almeno 2 immagini reference posizionate in `data/input_raw/`.
 
 ## Preparazione dell'ambiente
@@ -38,7 +38,7 @@ Questo documento accompagna la cartella `ai_influencer/` e descrive nel dettagli
    ```bash
    export OPENROUTER_API_KEY="sk-or-..."
    ```
-3. Avvia i container:
+3. Avvia i container (lo script `scripts/bootstrap_models.py` scarica automaticamente i pesi SDXL al primo avvio):
    ```bash
    docker compose -f docker/docker-compose.yaml up -d
    ```
