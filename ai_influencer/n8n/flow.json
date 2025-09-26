@@ -28,9 +28,9 @@
     },
     {
       "parameters": {
-        "command": "python3 scripts/leonardo_batch.py --prompt_bank scripts/prompt_bank.yaml --out data/synth_leonardo"
+        "command": "python3 scripts/openrouter_batch.py --prompt_bank scripts/prompt_bank.yaml --out data/synth_openrouter"
       },
-      "name": "Leonardo Batch",
+      "name": "OpenRouter Batch",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
@@ -40,7 +40,7 @@
     },
     {
       "parameters": {
-        "command": "python3 scripts/qc_face_sim.py --ref data/cleaned --cand data/synth_leonardo --out data/qc_passed --minsim 0.34"
+        "command": "python3 scripts/qc_face_sim.py --ref data/cleaned --cand data/synth_openrouter --out data/qc_passed --minsim 0.34"
       },
       "name": "QC Face",
       "type": "n8n-nodes-base.executeCommand",
@@ -52,7 +52,7 @@
     },
     {
       "parameters": {
-        "command": "python3 scripts/augment_and_caption.py --in data/qc_passed --out data/augment --captions data/captions --num_aug 1 --meta data/synth_leonardo/manifest.json"
+        "command": "python3 scripts/augment_and_caption.py --in data/qc_passed --out data/augment --captions data/captions --num_aug 1 --meta data/synth_openrouter/manifest.json"
       },
       "name": "Augment+Caption",
       "type": "n8n-nodes-base.executeCommand",
@@ -85,7 +85,7 @@
             "index": 0
           },
           {
-            "node": "Leonardo Batch",
+            "node": "OpenRouter Batch",
             "type": "main",
             "index": 0
           }
@@ -103,7 +103,7 @@
         ]
       ]
     },
-    "Leonardo Batch": {
+    "OpenRouter Batch": {
       "main": [
         [
           {
