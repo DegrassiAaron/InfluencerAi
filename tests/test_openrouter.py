@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import pathlib
 import sys
@@ -15,6 +15,8 @@ from ai_influencer.scripts.openrouter_models import MODEL_PRESETS, resolve_model
 from ai_influencer.webapp.openrouter import (
     OpenRouterClient,
     OpenRouterError,
+    _build_pricing_display,
+    _format_pricing_amount,
     classify_model_capabilities,
     summarize_models,
 )
@@ -275,3 +277,106 @@ def test_resolve_model_alias_is_case_insensitive() -> None:
 def test_resolve_model_alias_passthrough_for_custom_ids() -> None:
     custom = "my-org/custom-model"
     assert resolve_model_alias(custom) == custom
+
+
+def test_openrouter_client_reuses_external_httpx_client() -> None:
+    captured_headers: dict[str, str] = {}
+
+    async def scenario() -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(200))) as http_client:
+            client = OpenRouterClient(api_key="secret-token", client=http_client)
+
+            headers = client._headers()
+            captured_headers.update(headers)
+
+            async with client as ctx:
+                assert ctx is client
+
+            assert not http_client.is_closed
+
+    asyncio.run(scenario())
+
+    assert captured_headers["Authorization"] == "Bearer secret-token"
+    assert captured_headers["Content-Type"] == "application/json"
+
+
+def test_count_tokens_recovers_from_tokens_list_and_missing_usage_fields() -> None:
+    payload = {
+        "usage": {
+            "prompt_tokens": True,
+            "input_tokens": "2",
+        },
+        "tokens": [1, 2, 3, 4, 5],
+    }
+
+    transport = make_transport({"/tokenize": httpx.Response(200, json=payload)})
+
+    async def scenario() -> dict[str, int]:
+        client = OpenRouterClient(transport=transport)
+
+        try:
+            return await client.count_tokens("demo", "prompt")
+        finally:
+            await client.close()
+
+    result = asyncio.run(scenario())
+
+    assert result == {
+        "prompt_tokens": 2,
+        "completion_tokens": 3,
+        "total_tokens": 5,
+    }
+
+
+def test_count_tokens_combines_prompt_and_completion_when_total_missing() -> None:
+    payload = {
+        "usage": {
+            "prompt_tokens": "4",
+            "completion_tokens": "1",
+        },
+    }
+
+    transport = make_transport({"/tokenize": httpx.Response(200, json=payload)})
+
+    async def scenario() -> dict[str, int]:
+        client = OpenRouterClient(transport=transport)
+
+        try:
+            return await client.count_tokens("demo", "prompt")
+        finally:
+            await client.close()
+
+    result = asyncio.run(scenario())
+
+    assert result == {
+        "prompt_tokens": 4,
+        "completion_tokens": 1,
+        "total_tokens": 5,
+    }
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (None, None),
+        ("invalid", None),
+        (float("inf"), None),
+        ("0.0005", "$0.0005"),
+        ("0.05", "$0.05"),
+        ("2", "$2"),
+    ],
+)
+def test_format_pricing_amount_handles_various_inputs(value: Any, expected: Optional[str]) -> None:
+    assert _format_pricing_amount(value) == expected
+
+
+def test_build_pricing_display_prefers_prioritized_entries() -> None:
+    pricing = {
+        "image_generation": {"standard": "   $0.12   "},
+        "output": {"text": {"usd": "0.0008"}},
+        "misc": {"note": "  "},
+    }
+
+    display = _build_pricing_display(pricing)
+
+    assert display == "Output Text Usd: $0.0008"

@@ -15,3 +15,11 @@ Questo documento integra la documentazione sugli script OpenRouter fornendo un r
 | — | `meta-llama/llama-3.1-70b-instruct` | 0.00000010 | 0.00000028 | Modello testuale usato negli esempi della guida (`openrouter_text.py`). Costo per 1K token input/output. |
 
 _Per aggiornare i valori_: usare l'endpoint `/api/v1/models` di OpenRouter con autenticazione oppure annotare manualmente le tariffe riportate nella dashboard ogni volta che cambiano.
+
+## Novità
+- **Formattazione tariffe nella webapp** – l'endpoint `/api/models` sfrutta ora heuristics avanzate per scegliere automaticamente
+  la metrica più significativa (es. `Output Text USD`) e normalizzare i valori monetari in dollari. I nuovi test assicurano che
+  anche stringhe con spazi o alias personalizzati vengano ripuliti correttamente.
+- **Conteggio token resiliente** – le utility CLI e l'API `/api/tokenize` gestiscono risposte OpenRouter incomplete
+  ricostruendo il numero totale di token da campi alternativi (`input_tokens`, `tokens[]`) per garantire feedback coerente
+  anche con modelli sperimentali.
