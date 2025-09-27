@@ -131,6 +131,9 @@ class ServiceUpdateRequest(BaseModel):
     endpoint: Optional[AnyHttpUrl] = Field(
         default=None, description="Override service endpoint"
     )
+    base_url: Optional[AnyHttpUrl] = Field(
+        default=None, description="Override service base URL"
+    )
 
     @field_validator("api_key", mode="before")
     @classmethod
@@ -155,13 +158,26 @@ class ServiceUpdateRequest(BaseModel):
             return value
         return value
 
+    @field_validator("base_url", mode="before")
+    @classmethod
+    def _normalize_base_url(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return None
+            return value
+        return value
+
     @model_validator(mode="after")
     def _ensure_payload(self) -> "ServiceUpdateRequest":
 
         api_key_provided = "api_key" in self.model_fields_set
         endpoint_provided = "endpoint" in self.model_fields_set
+        base_url_provided = "base_url" in self.model_fields_set
 
-        if not api_key_provided and not endpoint_provided:
+        if not any([api_key_provided, endpoint_provided, base_url_provided]):
             raise ValueError("Provide at least one value to update")
         if api_key_provided and self.api_key is None:
             raise ValueError("API key must not be empty")
@@ -236,9 +252,13 @@ class ServiceDefinition:
         if update.api_key is not None and self.api_key_env:
             os.environ[self.api_key_env] = update.api_key
             updated["api_key"] = True
-        if update.base_url is not None and self.base_url_env:
-            os.environ[self.base_url_env] = str(update.base_url)
-            updated["base_url"] = str(update.base_url)
+        if "base_url" in update.model_fields_set and self.base_url_env:
+            if update.base_url is None:
+                os.environ.pop(self.base_url_env, None)
+                updated["base_url"] = None
+            else:
+                os.environ[self.base_url_env] = str(update.base_url)
+                updated["base_url"] = str(update.base_url)
         return self.describe(updated=updated)
 
 
