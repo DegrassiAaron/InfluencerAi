@@ -33,6 +33,10 @@ Configura queste variabili prima di avviare gli script o i container. Possono es
 | `OPENROUTER_APP_TITLE` | ➖ | Nome dell'applicazione riportato negli header verso OpenRouter, utile per il billing dashboard. | Webapp |
 | `OPENROUTER_APP_URL` | ➖ | URL pubblico del progetto da mostrare nel billing dashboard di OpenRouter. | Webapp |
 | `BASE_MODEL` | ➖ | Percorso del checkpoint SDXL da utilizzare di default nel training LoRA. | Script `train_lora.sh`, workflow n8n |
+| `N8N_BASIC_AUTH_ACTIVE` | ➖ | Abilita/disabilita la Basic Auth sul pannello e sui webhook (`true` di default). | Servizio Docker `n8n_local` |
+| `N8N_BASIC_AUTH_USER` | ➖ | Username per l'accesso all'interfaccia n8n e ai webhook protetti. | Servizio Docker `n8n_local` |
+| `N8N_BASIC_AUTH_PASSWORD` | ➖ | Password associata allo user Basic Auth n8n. | Servizio Docker `n8n_local` |
+| `N8N_WEBHOOK_URL` | ➖ | URL pubblico dei webhook (utile dietro tunnel/reverse proxy). | Servizio Docker `n8n_local` |
 | `HF_TOKEN` | ➖ | Token Hugging Face per scaricare modelli privati o ad accesso limitato. | Script `bootstrap_models.py`, CLI |
 
 > Suggerimento: crea un file `ai_influencer/docker/.env` copiando `ai_influencer/docker/.env.example` e aggiorna i valori sensibili una sola volta.
@@ -85,6 +89,7 @@ Il progetto **Influencer AI** fornisce un flusso end-to-end per costruire una pe
    - `comfyui_local` (interfaccia ComfyUI su http://localhost:8188)
    - `kohya_local` (ambiente kohya_ss per LoRA)
    - `ai_influencer_webapp` (Control Hub su http://localhost:8000)
+   - `n8n_local` (automazione no-code n8n su http://localhost:5678)
 
 ## Esecuzione della pipeline
 Esegui i comandi nel container `ai_influencer_tools` salvo diversa indicazione:
@@ -259,7 +264,7 @@ ai_influencer/
 ```
 
 - **GUI desktop** (`scripts/gui_app.py`): fornisce una finestra Tkinter con wizard per API key, preparazione dataset, generazione testo/immagini, QC e augment. Ogni pulsante invoca gli script CLI corrispondenti mostrando i log in tempo reale.
-- **Workflow n8n** (`n8n/flow.json`): definisce un webhook che esegue sequenzialmente `prepare_dataset.py`, `openrouter_batch.py` e step collegati all'interno del container Docker; il nodo finale "Train LoRA" accetta un campo JSON `base_model` per scegliere il checkpoint da passare allo script.
+- **Workflow n8n** (`n8n/flow.json` + servizio `n8n_local`): espone il webhook `/webhook/ai-influencer-hybrid` e, tramite `docker exec`, orchestra gli script nei container `ai_influencer_tools` e `kohya_local` (con supporto al parametro JSON `base_model`).
 - **Script PowerShell** (`scripts/start_machine.ps1`, `scripts/stop_machine.ps1`): facilitano l'avvio/arresto dei container su Windows.
 
 ## Troubleshooting rapido
