@@ -198,6 +198,7 @@ Il servizio `ai_influencer_webapp` fornisce un **Control Hub API-first** su [htt
 - Avvia lo stack Docker (`docker compose -f ai_influencer/docker/docker-compose.yaml up -d`).
 - Apri <http://localhost:8000/docs> per accedere alla pagina Swagger auto-generata da FastAPI.
 - Da qui puoi testare ogni endpoint direttamente dal browser, consultare gli schemi dei payload e verificare le risposte attese.
+- Per una descrizione testuale completa delle rotte REST (metodi, payload, codici di risposta ed esempi di integrazione) consulta [docs/funzionalita.rm](docs/funzionalita.rm).
 
 ### Esempi di richieste API
 I seguenti esempi assumono che la variabile `OPENROUTER_API_KEY` sia configurata nel container `ai_influencer_webapp` (tramite `.env` o variabili d'ambiente Docker).
