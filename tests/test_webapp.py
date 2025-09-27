@@ -397,6 +397,9 @@ def test_get_influencer_returns_stored_metadata() -> None:
             {"id": "c2", "title": "Behind the scenes"},
         ]
         assert "created_at" in payload
+    finally:
+        store.clear()
+
 
 def test_create_influencer_with_lora_and_contents_and_retrieve() -> None:
     store = get_influencer_store()

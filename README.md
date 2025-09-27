@@ -308,6 +308,14 @@ ai_influencer/
   pytest
   ```
   I test validano il client OpenRouter (cache, gestione errori, payload chunked) e l'endpoint `/api/influencer` della webapp.
+- Misura la copertura (obiettivo ≥90%) e genera, se serve, un report HTML:
+  ```bash
+  coverage run -m pytest
+  coverage report
+  coverage html  # opzionale, salva il report in htmlcov/index.html
+  ```
+  La suite copre ora anche i fallback del client OpenRouter (riuso dell'`AsyncClient`, normalizzazione del conteggio token e
+  prioritizzazione delle tariffe modellate) portando la copertura complessiva al ~96%.
 
 Per modifiche al Control Hub puoi utilizzare l'ambiente Docker `webapp` oppure avviare FastAPI in locale:
 ```bash
