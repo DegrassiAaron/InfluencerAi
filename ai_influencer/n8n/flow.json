@@ -16,7 +16,7 @@
     },
     {
       "parameters": {
-        "command": "python3 scripts/prepare_dataset.py --in data/input_raw --out data/cleaned --do_rembg --do_facecrop"
+        "command": "docker exec -w /workspace ai_influencer_tools python3 scripts/prepare_dataset.py --in data/input_raw --out data/cleaned --do_rembg --do_facecrop"
       },
       "name": "Docker Exec - Clean",
       "type": "n8n-nodes-base.executeCommand",
@@ -28,7 +28,7 @@
     },
     {
       "parameters": {
-        "command": "python3 scripts/openrouter_batch.py --prompt_bank scripts/prompt_bank.yaml --out data/synth_openrouter"
+        "command": "docker exec -w /workspace ai_influencer_tools python3 scripts/openrouter_batch.py --prompt_bank scripts/prompt_bank.yaml --out data/synth_openrouter"
       },
       "name": "OpenRouter Batch",
       "type": "n8n-nodes-base.executeCommand",
@@ -40,7 +40,7 @@
     },
     {
       "parameters": {
-        "command": "python3 scripts/qc_face_sim.py --ref data/cleaned --cand data/synth_openrouter --out data/qc_passed --minsim 0.34"
+        "command": "docker exec -w /workspace ai_influencer_tools python3 scripts/qc_face_sim.py --ref data/cleaned --cand data/synth_openrouter --out data/qc_passed --minsim 0.34"
       },
       "name": "QC Face",
       "type": "n8n-nodes-base.executeCommand",
@@ -52,7 +52,7 @@
     },
     {
       "parameters": {
-        "command": "python3 scripts/augment_and_caption.py --in data/qc_passed --out data/augment --captions data/captions --num_aug 1 --meta data/synth_openrouter/manifest.json"
+        "command": "docker exec -w /workspace ai_influencer_tools python3 scripts/augment_and_caption.py --in data/qc_passed --out data/augment --captions data/captions --num_aug 1 --meta data/synth_openrouter/manifest.json"
       },
       "name": "Augment+Caption",
       "type": "n8n-nodes-base.executeCommand",
@@ -64,7 +64,7 @@
     },
     {
       "parameters": {
-        "command": "bash scripts/train_lora.sh"
+        "command": "={{\"docker exec -w /workspace kohya_local bash -lc '\" + ($json[\"base_model\"] ? \"BASE_MODEL=\\\"\" + $json[\"base_model\"] + \"\\\" \" : \"\") + \"bash scripts/train_lora.sh'\"}}"
       },
       "name": "Train LoRA",
       "type": "n8n-nodes-base.executeCommand",

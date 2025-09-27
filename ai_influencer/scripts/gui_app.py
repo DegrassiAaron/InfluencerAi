@@ -19,6 +19,8 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from ai_influencer.scripts.openrouter_models import MODEL_PRESETS, resolve_model_alias
+
 ROOT = Path(__file__).resolve().parent
 PYTHON = sys.executable
 
@@ -130,7 +132,7 @@ class PipelineGUI:
         frame.pack(fill="x", pady=6)
 
         self.image_out_var = tk.StringVar(value=str(Path("data/synth_openrouter")))
-        self.image_model_var = tk.StringVar(value="stabilityai/sdxl")
+        self.image_model_var = tk.StringVar(value="sdxl")
         self.image_size_var = tk.StringVar(value="1024x1024")
         self.image_per_scene_var = tk.IntVar(value=12)
         self.image_sleep_var = tk.DoubleVar(value=3.0)
@@ -139,27 +141,39 @@ class PipelineGUI:
         self._add_path_row(frame, "Output dir", self.image_out_var, 1, is_dir=True)
 
         ttk.Label(frame, text="Modello").grid(row=2, column=0, sticky="w", pady=(6, 0))
-        ttk.Entry(frame, textvariable=self.image_model_var).grid(
-            row=2, column=1, sticky="ew", pady=(6, 0)
-        )
+        model_values = [alias for alias in MODEL_PRESETS.keys()]
+        ttk.Combobox(
+            frame,
+            textvariable=self.image_model_var,
+            values=model_values,
+            state="normal",
+        ).grid(row=2, column=1, sticky="ew", pady=(6, 0))
+        ttk.Label(
+            frame,
+            text="Preset disponibili: " + ", ".join(
+                f"{alias} → {model}" for alias, model in MODEL_PRESETS.items()
+            ),
+            wraplength=520,
+            foreground="#555555",
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
-        ttk.Label(frame, text="Risoluzione").grid(row=3, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(frame, text="Risoluzione").grid(row=4, column=0, sticky="w", pady=(6, 0))
         ttk.Entry(frame, textvariable=self.image_size_var).grid(
-            row=3, column=1, sticky="ew", pady=(6, 0)
-        )
-
-        ttk.Label(frame, text="Img per scena").grid(row=4, column=0, sticky="w", pady=(6, 0))
-        ttk.Entry(frame, textvariable=self.image_per_scene_var).grid(
             row=4, column=1, sticky="ew", pady=(6, 0)
         )
 
-        ttk.Label(frame, text="Pausa tra richieste (s)").grid(row=5, column=0, sticky="w", pady=(6, 0))
-        ttk.Entry(frame, textvariable=self.image_sleep_var).grid(
+        ttk.Label(frame, text="Img per scena").grid(row=5, column=0, sticky="w", pady=(6, 0))
+        ttk.Entry(frame, textvariable=self.image_per_scene_var).grid(
             row=5, column=1, sticky="ew", pady=(6, 0)
         )
 
+        ttk.Label(frame, text="Pausa tra richieste (s)").grid(row=6, column=0, sticky="w", pady=(6, 0))
+        ttk.Entry(frame, textvariable=self.image_sleep_var).grid(
+            row=6, column=1, sticky="ew", pady=(6, 0)
+        )
+
         btn = ttk.Button(frame, text="Genera immagini", command=self.run_images)
-        btn.grid(row=6, column=0, columnspan=2, sticky="ew", pady=8)
+        btn.grid(row=7, column=0, columnspan=2, sticky="ew", pady=8)
         self._register_button(btn)
 
     def _build_qc_section(self, parent: ttk.Frame) -> None:
@@ -398,7 +412,7 @@ class PipelineGUI:
             "--out",
             out,
             "--model",
-            self.image_model_var.get().strip() or "stabilityai/sdxl",
+            resolve_model_alias(self.image_model_var.get().strip() or "sdxl"),
             "--size",
             self.image_size_var.get().strip() or "1024x1024",
             "--per_scene",

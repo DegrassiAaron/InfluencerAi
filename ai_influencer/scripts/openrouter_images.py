@@ -22,6 +22,11 @@ from typing import Any, Dict
 import requests
 import yaml
 
+from ai_influencer.scripts.openrouter_models import (
+    MODEL_PRESETS_HELP,
+    resolve_model_alias,
+)
+
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
@@ -73,7 +78,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Generate images via OpenRouter Images API")
     parser.add_argument("--prompt_bank", required=True, help="YAML prompt bank with persona/scenes")
     parser.add_argument("--out", required=True, help="Output directory for generated images")
-    parser.add_argument("--model", default="stabilityai/sdxl", help="OpenRouter image model ID")
+    parser.add_argument(
+        "--model",
+        default="sdxl",
+        help=(
+            "OpenRouter image model ID. Preset alias disponibili: "
+            f"{MODEL_PRESETS_HELP}."
+        ),
+    )
     parser.add_argument("--size", default="1024x1024", help="Image resolution, e.g. 1024x1024")
     parser.add_argument("--per_scene", type=int, default=12, help="Images to sample per scene preset")
     parser.add_argument("--sleep", type=float, default=3.0, help="Seconds to wait between requests")
@@ -81,6 +93,10 @@ def main() -> None:
 
     with open(args.prompt_bank, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+
+    model_id = resolve_model_alias(args.model)
+    if model_id != args.model:
+        print(f"[openrouter] alias '{args.model}' risolto in '{model_id}'")
 
     persona: str = cfg.get("persona", "AI influencer")
     negatives: str = cfg.get("negatives", "")
@@ -110,7 +126,7 @@ def main() -> None:
             )
 
             try:
-                response = request_image(args.model, prompt, negatives, args.size)
+                response = request_image(model_id, prompt, negatives, args.size)
                 image_bytes = extract_image_bytes(response)
                 name = sha(prompt + str(idx))
                 out_file = out_dir / f"{name}.png"
@@ -123,7 +139,7 @@ def main() -> None:
                     "focal": focal,
                     "lighting": light,
                     "prompt": prompt,
-                    "model": args.model,
+                    "model": model_id,
                     "size": args.size,
                 }
                 print(f"[openrouter] saved {out_file}")
