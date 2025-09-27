@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gestione Dati - AI Influencer Control Hub</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="header-bar">
+        <h1>Gestione dei Dati Operativi</h1>
+        <nav class="app-nav">
+          <a href="/"{% if active_nav == "home" %} aria-current="page"{% endif %}>
+            Generazione contenuti</a
+          >
+          <a href="/influencer"{% if active_nav == "influencer" %} aria-current="page"{% endif %}>
+            Analisi influencer</a
+          >
+          <a href="/data"{% if active_nav == "data" %} aria-current="page"{% endif %}>
+            Gestione dati</a
+          >
+          <a href="/settings"{% if active_nav == "settings" %} aria-current="page"{% endif %}>
+            Impostazioni</a
+          >
+        </nav>
+      </div>
+      <p>
+        Monitora e modifica i record raccolti lungo la pipeline di analisi. Utilizza la
+        tabella dei <strong>[DATI]</strong> per visualizzare, aggiornare o eliminare le
+        voci archiviate.
+      </p>
+    </header>
+
+    <main class="data-layout">
+      <section class="card data-card">
+        <div class="data-card-header">
+          <div class="data-card-heading">
+            <span class="data-badge">[DATI]</span>
+            <h2>Archivio centrale</h2>
+            <p class="data-subtitle">
+              Snapshot delle entità sincronizzate con le API interne.
+            </p>
+          </div>
+          <button type="button" id="create-data" class="button-primary">Nuovo record</button>
+        </div>
+
+        <div id="data-status" class="status-message empty">
+          Nessun dato disponibile. Crea un nuovo record per iniziare.
+        </div>
+
+        <div class="table-container" aria-live="polite">
+          <table id="data-table" class="data-table">
+            <caption class="table-caption">Tabella dei [DATI]</caption>
+            <thead>
+              <tr>
+                <th scope="col">Nome</th>
+                <th scope="col">Categoria</th>
+                <th scope="col">Aggiornato</th>
+                <th scope="col">Azioni</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <dialog
+      id="data-modal"
+      class="data-modal"
+      aria-modal="true"
+      aria-labelledby="data-modal-title"
+    >
+      <div class="modal-surface">
+        <header class="data-modal-header">
+          <h2 id="data-modal-title">Dettaglio record</h2>
+          <p id="data-modal-subtitle" class="data-modal-subtitle"></p>
+        </header>
+        <section id="data-details" class="data-details"></section>
+        <form id="data-form" class="form data-form" autocomplete="off">
+          <label for="data-payload" class="data-payload-label">
+            Payload JSON
+            <textarea id="data-payload" name="payload" spellcheck="false"></textarea>
+          </label>
+          <div id="data-form-error" class="error hidden" role="alert"></div>
+        </form>
+        <footer class="modal-actions">
+          <div class="modal-actions-left">
+            <button type="button" id="data-close" class="button-secondary">Chiudi</button>
+          </div>
+          <div class="modal-actions-right">
+            <button type="button" id="data-save">Salva modifiche</button>
+          </div>
+        </footer>
+      </div>
+    </dialog>
+
+    <script src="/static/data.js" type="module"></script>
+  </body>
+</html>

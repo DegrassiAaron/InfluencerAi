@@ -124,6 +124,13 @@ async def settings_view(request: Request) -> HTMLResponse:
     )
 
 
+@app.get("/data", response_class=HTMLResponse)
+async def data_view(request: Request) -> HTMLResponse:
+    return TEMPLATES.TemplateResponse(
+        "data.html", {"request": request, "active_nav": "data"}
+    )
+
+
 @app.get("/api/models")
 async def list_models(client: OpenRouterClient = Depends(get_client)) -> JSONResponse:
     try:
