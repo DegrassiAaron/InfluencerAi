@@ -143,6 +143,29 @@ class StubImageClient:
         self.closed = True
 
 
+class StubTokenClient:
+    """Stub client for exercising the token counting endpoint."""
+
+    def __init__(self, *, result=None, error: Exception | None = None) -> None:
+        self._result = result or {
+            "prompt_tokens": 12,
+            "completion_tokens": 0,
+            "total_tokens": 12,
+        }
+        self._error = error
+        self.calls: list[tuple[str, str]] = []
+        self.closed = False
+
+    async def count_tokens(self, model: str, prompt: str):
+        self.calls.append((model, prompt))
+        if self._error is not None:
+            raise self._error
+        return self._result
+
+    async def close(self) -> None:
+        self.closed = True
+
+
 def _clear_overrides() -> None:
     app.dependency_overrides.pop(get_client, None)
 
@@ -512,6 +535,57 @@ def test_generate_text_returns_502_on_openrouter_error() -> None:
     try:
         assert response.status_code == 502
         assert response.json() == {"detail": "stub failure"}
+        assert stub.closed is True
+    finally:
+        _clear_overrides()
+
+
+def test_count_tokens_returns_usage_payload_and_closes_client() -> None:
+    stub = StubTokenClient(
+        result={"prompt_tokens": 128, "completion_tokens": 64, "total_tokens": 192}
+    )
+
+    async def override_client() -> StubTokenClient:
+        return stub
+
+    app.dependency_overrides[get_client] = override_client
+
+    response = client.post(
+        "/api/tokenize",
+        json={"model": "meta/llama", "prompt": "Sample"},
+    )
+
+    try:
+        assert response.status_code == 200
+        assert response.json() == {
+            "usage": {
+                "prompt_tokens": 128,
+                "completion_tokens": 64,
+                "total_tokens": 192,
+            }
+        }
+        assert stub.calls == [("meta/llama", "Sample")]
+        assert stub.closed is True
+    finally:
+        _clear_overrides()
+
+
+def test_count_tokens_returns_502_on_openrouter_error() -> None:
+    stub = StubTokenClient(error=OpenRouterError("quota exceeded"))
+
+    async def override_client() -> StubTokenClient:
+        return stub
+
+    app.dependency_overrides[get_client] = override_client
+
+    response = client.post(
+        "/api/tokenize",
+        json={"model": "meta/llama", "prompt": "Sample"},
+    )
+
+    try:
+        assert response.status_code == 502
+        assert response.json() == {"detail": "quota exceeded"}
         assert stub.closed is True
     finally:
         _clear_overrides()

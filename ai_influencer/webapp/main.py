@@ -26,6 +26,11 @@ class TextGenerationRequest(BaseModel):
     prompt: str = Field(..., description="Prompt to send to the model")
 
 
+class TokenUsageRequest(BaseModel):
+    model: str = Field(..., description="OpenRouter model identifier")
+    prompt: str = Field(..., description="Prompt to tokenize")
+
+
 class ImageGenerationRequest(BaseModel):
     model: str
     prompt: str
@@ -79,6 +84,20 @@ async def generate_text(
     finally:
         await client.close()
     return JSONResponse({"content": result})
+
+
+@app.post("/api/tokenize")
+async def count_tokens(
+    payload: TokenUsageRequest,
+    client: OpenRouterClient = Depends(get_client),
+) -> JSONResponse:
+    try:
+        usage = await client.count_tokens(payload.model, payload.prompt)
+    except OpenRouterError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    finally:
+        await client.close()
+    return JSONResponse({"usage": usage})
 
 
 @app.post("/api/generate/image")

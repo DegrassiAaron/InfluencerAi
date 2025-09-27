@@ -199,6 +199,7 @@ Il servizio `ai_influencer_webapp` fornisce un **Control Hub API-first** su [htt
 | -------- | ------ | ----------------- | -------------------------------- |
 | `/api/models` | GET | Nessun payload. | Oggetto con chiave `models`, lista di modelli con `id`, `name`, `provider`, `capabilities`, `context_length`, `pricing`, `pricing_display`. |
 | `/api/generate/text` | POST | JSON `{ "model": string, "prompt": string }`. | Oggetto `{ "content": string }` con il testo generato. |
+| `/api/tokenize` | POST | JSON `{ "model": string, "prompt": string }`. | Oggetto `{ "usage": { "prompt_tokens": int, "completion_tokens": int, "total_tokens": int } }`. |
 | `/api/generate/image` | POST | JSON `{ "model": string, "prompt": string, "negative_prompt"?: string, "width": int, "height": int, "steps"?: int, "guidance"?: float }`. | Oggetto `{ "image": string, "is_remote": bool }`, dove `image` è base64 o URL remoto. |
 | `/api/generate/video` | POST | JSON `{ "model": string, "prompt": string, "duration"?: number, "size"?: string }`. | Oggetto `{ "video": string, "is_remote": bool }`, con base64 inline o URL streaming. |
 | `/api/influencer` | POST | JSON `{ "identifier": string, "method"?: "official" \| "scrape" }`. | Oggetto con `profile`, `metrics`, `media`, `identifier`, `method`, `retrieved_at`. `media` contiene schede con `id`, `titolo`, `tipo`, `testo_post`, `image_url`, `image_base64`, `thumbnail_url`, `success_score`, `original_url`, `pubblicato_il`, `transcript`. |
@@ -231,6 +232,17 @@ I seguenti esempi assumono che la variabile `OPENROUTER_API_KEY` sia configurata
     }'
   ```
   L'API risponde con il testo generato dal modello selezionato (campo `content`).
+
+- **Conteggio token (POST `/api/tokenize`)**
+  ```bash
+  curl -X POST http://localhost:8000/api/tokenize \
+    -H 'Content-Type: application/json' \
+    -d '{
+      "model": "meta-llama/llama-3.1-70b-instruct",
+      "prompt": "Riassumi in 50 parole la strategia social per un lancio beauty."
+    }'
+  ```
+  La risposta restituisce l'oggetto `usage` con `prompt_tokens`, `completion_tokens` e `total_tokens`, utile per stimare i costi.
 
 - **Generazione di immagini (POST `/api/generate/image`)**
   ```bash
