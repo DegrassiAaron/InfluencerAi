@@ -482,6 +482,60 @@ textarea {
   color: rgba(240, 246, 252, 0.75);
 }
 
+.settings-guidelines {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 1.75rem;
+  counter-reset: item;
+}
+
+.settings-guidelines > li {
+  line-height: 1.6;
+}
+
+.settings-guidelines h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.settings-sublist {
+  margin: 0.75rem 0 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.settings-sublist li {
+  color: rgba(240, 246, 252, 0.78);
+}
+
+.settings-note {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid rgba(56, 139, 253, 0.7);
+  background: rgba(56, 139, 253, 0.08);
+  color: rgba(201, 218, 255, 0.9);
+  border-radius: 8px;
+}
+
+.settings-code {
+  margin: 0.75rem 0 0;
+  padding: 0.85rem 1rem;
+  background: rgba(10, 14, 23, 0.8);
+  border: 1px solid rgba(240, 246, 252, 0.12);
+  border-radius: 12px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.settings-code code {
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, monospace;
+  color: rgba(219, 234, 255, 0.95);
+  white-space: pre;
+}
+
 .table-wrapper {
   overflow-x: auto;
 }

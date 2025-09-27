@@ -56,6 +56,197 @@
             </tbody>
           </table>
         </div>
+
+      </section>
+
+      <section class="card settings-card">
+        <h2>Linee guida per le integrazioni ufficiali</h2>
+        <ol class="settings-guidelines">
+          <li>
+            <h3>Endpoints “sicuri” (API ufficiali) e campi immagini</h3>
+            <ul class="settings-sublist">
+              <li>
+                <strong>YouTube Data API v3</strong> –
+                <code>channels.list?part=snippet,statistics&amp;id=...</code> restituisce
+                gli URL delle miniature in
+                <code>snippet.thumbnails</code> (default/medium/high). Documentazione:
+                Google for Developers.
+              </li>
+              <li>
+                <strong>Instagram Graph API – Business Discovery</strong> –
+                <code>/{ig-user-id}?fields=business_discovery.username(&lt;handle&gt;){...}</code>
+                fornisce <code>profile_picture_url</code>,
+                <code>followers_count</code> e le immagini dei post. Richiede account
+                Business/Creator collegato a una Pagina Facebook. Documentazione:
+                Meta for Developers.
+              </li>
+              <li>
+                <strong>X (Twitter) API v2</strong> –
+                <code>GET /2/users/by/username/{username}?user.fields=profile_image_url,...</code>
+                fornisce avatar in più risoluzioni, descrizione e metriche pubbliche.
+                Documentazione: X Developer Platform.
+              </li>
+              <li>
+                <strong>TikTok API v2</strong> –
+                <code>GET https://open.tiktokapis.com/v2/user/info/</code> (scope OAuth
+                richiesto) restituisce dati profilo e immagini/thumbnail disponibili.
+                Documentazione: TikTok for Developers.
+              </li>
+            </ul>
+            <p class="settings-note">
+              Nota: i vecchi endpoint Bing Image Search stanno cambiando; valutare
+              provider alternativi o SERP wrapper nel rispetto delle licenze.
+            </p>
+          </li>
+          <li>
+            <h3>Architettura modulare con scraping disattivabile</h3>
+            <p>
+              Utilizzare variabili d'ambiente per attivare o disattivare lo scraping e
+              definire le piattaforme abilitate. Esempio di configurazione:
+            </p>
+            <pre class="settings-code"><code>SCRAPING_ENABLED=false
+PLATFORMS=youtube,instagram,x,tiktok
+YOUTUBE_API_KEY=...
+X_BEARER_TOKEN=...
+FB_APP_ID=...
+FB_APP_SECRET=...
+IG_SYSTEM_USER_TOKEN=...
+TIKTOK_CLIENT_ID=...
+TIKTOK_CLIENT_SECRET=...</code></pre>
+            <p>
+              La pipeline consigliata prevede: normalizzazione input, fetch tramite API
+              ufficiali, normalizzazione dati, eventuale scraping opzionale, layer di
+              policy, cache/CDN e persistenza su database.
+            </p>
+          </li>
+          <li>
+            <h3>Implementazione pratica (Node/TypeScript) — API ufficiali first</h3>
+            <pre class="settings-code"><code>// pseudo-TS robusto
+type Platform = 'youtube'|'instagram'|'x'|'tiktok';
+interface FetchOptions { scrapingEnabled: boolean }
+
+export async function fetchInfluencer(platform: Platform, handleOrUrl: string, opt: FetchOptions){
+  const target = await resolveHandle(platform, handleOrUrl);
+  const apiData = await fetchViaOfficialAPI(platform, target);
+  let media = extractMedia(apiData);
+
+  if (needsMore(media) &amp;&amp; opt.scrapingEnabled) {
+    const scraped = await tryScrape(platform, target);
+    media = mergePreferAPI(media, scraped);
+  }
+  return normalize(platform, target, apiData, media);
+}</code></pre>
+            <p>Esempi di chiamate semplificate:</p>
+            <pre class="settings-code"><code># YouTube – channel
+curl "https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&amp;id=CHANNEL_ID&amp;key=$YOUTUBE_API_KEY"
+
+# Instagram – business_discovery
+curl "https://graph.facebook.com/v19.0/{IG_USER_ID}?\
+fields=business_discovery.username(INFLUENCER){username,biography,profile_picture_url,followers_count,media_count,media.limit(12){id,media_type,media_url,thumbnail_url,caption,timestamp}}&amp;\
+access_token=$IG_SYSTEM_USER_TOKEN"
+
+# X – user by username
+curl -H "Authorization: Bearer $X_BEARER_TOKEN" \\n"https://api.x.com/2/users/by/username/USERNAME?user.fields=profile_image_url,public_metrics,description,verified"
+
+# TikTok – user info (v2)
+curl -H "Authorization: Bearer $TIKTOK_ACCESS_TOKEN" \\n"https://open.tiktokapis.com/v2/user/info/"</code></pre>
+          </li>
+          <li>
+            <h3>Scraping intelligente (fallback opzionale)</h3>
+            <ul class="settings-sublist">
+              <li>Attivare solo quando i campi essenziali mancano dalle API.</li>
+              <li>
+                Utilizzare Playwright con profili stealth, rotazione proxy e rispetto di
+                <code>robots.txt</code> dove applicabile.
+              </li>
+              <li>
+                Limitare lo scraping a metadati pubblici, con rate cap (es. una richiesta
+                al minuto per profilo) e logging <code>collected_via='scraping'</code>.
+              </li>
+              <li>
+                Governare l'attivazione tramite env come
+                <code>SCRAPING_ENABLED</code>, <code>SCRAPE_X</code>,
+                <code>SCRAPE_IG</code>, <code>SCRAPE_LEVEL</code>.
+              </li>
+              <li>
+                Ricordare i rischi legali: le piattaforme possono vietare lo scraping.
+              </li>
+            </ul>
+          </li>
+          <li>
+            <h3>n8n/cron: orchestrazione step-by-step</h3>
+            <p>Workflow suggerito per processare un handle:</p>
+            <ul class="settings-sublist">
+              <li>HTTP Webhook → riceve <code>{platform, handle}</code>.</li>
+              <li>Switch per piattaforma.</li>
+              <li>HTTP Request → chiama l'API interna <code>/fetchInfluencer</code>.</li>
+              <li>
+                IF <code>collected_via == scraping</code> → impostare flag “review
+                needed”.
+              </li>
+              <li>Postgres Node → upsert di <code>influencer</code> e <code>media</code>.</li>
+              <li>
+                Function → normalizza/filtra immagini (solo HTTPS, dimensioni minime).
+              </li>
+              <li>CDN (opzionale) → download consentito solo con licenza adeguata.</li>
+              <li>Slack/Email → report con differenze e anomalie.</li>
+              <li>Error branch → backoff + retry con jitter.</li>
+            </ul>
+          </li>
+          <li>
+            <h3>Verifica, rate-limit e resilienza</h3>
+            <ul class="settings-sublist">
+              <li>Backoff esponenziale per status 429/5xx.</li>
+              <li>Supportare ETag/If-None-Match (es. YouTube).</li>
+              <li>Paginare correttamente business_discovery (cursor-based).</li>
+              <li>Deduplicare su <code>media_id</code>/URL e validare le immagini via HEAD.</li>
+            </ul>
+          </li>
+          <li>
+            <h3>Rischi, blind spot, trade-off</h3>
+            <ul class="settings-sublist">
+              <li>
+                Instagram: business_discovery richiede account Business/Creator collegato
+                a Pagina.
+              </li>
+              <li>TikTok: molti endpoint necessitano OAuth dell'utente target.</li>
+              <li>Scraping: fragile ai cambi DOM e potenziali violazioni ToS.</li>
+              <li>
+                Licenze immagini: un URL non equivale al diritto di redistribuzione
+                commerciale.
+              </li>
+              <li>Attenzione al decommissioning di Bing Image Search.</li>
+            </ul>
+          </li>
+          <li>
+            <h3>Alternative concrete</h3>
+            <ul class="settings-sublist">
+              <li>Solo API ufficiali, senza scraping → massima compliance.</li>
+              <li>
+                API ufficiali + provider terzi con licenza per immagini correlate (es.
+                SERP wrapper, SearchApi) → verificare ToS.
+              </li>
+              <li>
+                API ufficiali + scraping mirato in whitelist (es. solo avatar mancanti) →
+                riduce il rischio.
+              </li>
+            </ul>
+          </li>
+          <li>
+            <h3>Checklist “pronta all’uso”</h3>
+            <ul class="settings-sublist">
+              <li>Variabili env impostate, <code>SCRAPING_ENABLED=false</code> di default.</li>
+              <li>
+                Chiavi/OAuth configurati per YouTube, Instagram, X, TikTok (se necessari).
+              </li>
+              <li>Moduli per piattaforma con test e mock di rate-limit.</li>
+              <li>Normalizer e schema Postgres creati.</li>
+              <li>Log delle fonti (API vs scraping) con audit diff.</li>
+              <li>Workflow n8n con retry/backoff e report.</li>
+              <li>Policy immagini e licenze definite.</li>
+            </ul>
+          </li>
+        </ol>
       </section>
     </main>
 

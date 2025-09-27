@@ -133,11 +133,23 @@ function openServiceDialog(serviceId) {
   titleEl.textContent = `Modifica ${service.name}`;
 
   const envHints = [];
-  if (service.env?.api_key) {
-    envHints.push(`Chiave: ${service.env.api_key}`);
-  }
-  if (service.env?.endpoint) {
-    envHints.push(`Endpoint: ${service.env.endpoint}`);
+  if (service.env && typeof service.env === 'object') {
+    Object.entries(service.env).forEach(([key, value]) => {
+      if (!value) return;
+      let label;
+      if (key === 'api_key') {
+        label = `Chiave: ${value}`;
+      } else if (key === 'endpoint') {
+        label = `Endpoint: ${value}`;
+      } else {
+        const friendlyKey = key
+          .split('_')
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' ');
+        label = `${friendlyKey}: ${value}`;
+      }
+      envHints.push(label);
+    });
   }
   envHintEl.textContent = envHints.length
     ? `Variabili ambiente: ${envHints.join(' · ')}`
