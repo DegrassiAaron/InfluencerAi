@@ -367,6 +367,50 @@ def test_create_influencer_persists_story_and_personality() -> None:
         store.clear()
 
 
+def test_get_influencer_returns_stored_metadata() -> None:
+    store = get_influencer_store()
+    store.clear()
+    try:
+        record = store.create(
+            identifier="@socialstar",
+            story="From humble beginnings to viral sensation.",
+            personality="Charismatic and witty",
+        )
+        record.lora_model = "models/lora/socialstar.safetensors"
+        record.contents = [
+            {"id": "c1", "title": "Highlight reel"},
+            {"id": "c2", "title": "Behind the scenes"},
+        ]
+
+        response = client.get("/api/influencers/socialstar")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["handle"] == "@socialstar"
+        assert payload["identifier"] == "socialstar"
+        assert payload["story"] == "From humble beginnings to viral sensation."
+        assert payload["personality"] == "Charismatic and witty"
+        assert payload["lora_model"] == "models/lora/socialstar.safetensors"
+        assert payload["contents"] == [
+            {"id": "c1", "title": "Highlight reel"},
+            {"id": "c2", "title": "Behind the scenes"},
+        ]
+        assert "created_at" in payload
+    finally:
+        store.clear()
+
+
+def test_get_influencer_returns_404_for_missing_record() -> None:
+    store = get_influencer_store()
+    store.clear()
+    try:
+        response = client.get("/api/influencers/unknown")
+        assert response.status_code == 404
+        assert response.json() == {"detail": "Influencer non trovato"}
+    finally:
+        store.clear()
+
+
 def test_influencer_lookup_returns_enriched_media():
     response = client.post(
         "/api/influencer",
@@ -393,6 +437,31 @@ def test_influencer_lookup_returns_enriched_media():
         assert "success_score" in item
         assert "pubblicato_il" in item
         assert "transcript" in item
+
+
+def test_influencer_lookup_includes_store_specific_data() -> None:
+    store = get_influencer_store()
+    store.clear()
+    try:
+        record = store.create(
+            identifier="@aurora_rise",
+            story="Explorer of cosmic stories.",
+            personality="Inspiring dreamer",
+        )
+        record.lora_model = "models/lora/aurora.safetensors"
+        record.contents = [{"id": "m1", "title": "Starlight"}]
+
+        response = client.post(
+            "/api/influencer",
+            json={"identifier": "@aurora_rise", "method": "official"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["lora_model"] == "models/lora/aurora.safetensors"
+        assert payload["contents"] == [{"id": "m1", "title": "Starlight"}]
+    finally:
+        store.clear()
 
 
 @pytest.mark.parametrize("identifier", ["", "   "])
