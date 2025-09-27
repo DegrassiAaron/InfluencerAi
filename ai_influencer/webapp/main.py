@@ -117,6 +117,9 @@ class ServiceUpdateRequest(BaseModel):
         description="Override service base URL",
         validation_alias=AliasChoices("base_url", "endpoint"),
     )
+    base_url: Optional[AnyHttpUrl] = Field(
+        default=None, description="Override service base URL"
+    )
 
     @field_validator("api_key", mode="before")
     @classmethod
@@ -141,13 +144,29 @@ class ServiceUpdateRequest(BaseModel):
             return value
         return value
 
+    @field_validator("base_url", mode="before")
+    @classmethod
+    def _normalize_base_url(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return None
+            return value
+        return value
+
     @model_validator(mode="after")
     def _ensure_payload(self) -> "ServiceUpdateRequest":
 
         api_key_provided = "api_key" in self.model_fields_set
         base_url_provided = "base_url" in self.model_fields_set
 
-        if not api_key_provided and not base_url_provided:
+
+        endpoint_provided = "endpoint" in self.model_fields_set
+        base_url_provided = "base_url" in self.model_fields_set
+
+        if not any([api_key_provided, endpoint_provided, base_url_provided]):
             raise ValueError("Provide at least one value to update")
         if api_key_provided and self.api_key is None:
             raise ValueError("API key must not be empty")
@@ -235,6 +254,7 @@ class ServiceDefinition:
                 raise HTTPException(
                     status_code=400, detail="Service does not accept endpoint overrides"
                 )
+
             if update.base_url is None:
                 os.environ.pop(self.base_url_env, None)
                 updated["base_url"] = None
@@ -243,6 +263,7 @@ class ServiceDefinition:
                 updated["base_url"] = str(update.base_url)
 
         return self.describe(updated=updated or None)
+
 
 
 SERVICE_REGISTRY: Dict[str, ServiceDefinition] = {
