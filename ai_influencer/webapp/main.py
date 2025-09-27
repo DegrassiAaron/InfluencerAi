@@ -8,12 +8,13 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import AnyHttpUrl, BaseModel, Field, field_validator, model_validator
 
+from ai_influencer.webapp import storage
 from ai_influencer.webapp.openrouter import (
     OpenRouterClient,
     OpenRouterError,
@@ -25,6 +26,17 @@ app = FastAPI(title="AI Influencer Control Hub")
 
 async def get_client() -> OpenRouterClient:
     return OpenRouterClient()
+
+
+def get_storage():
+    try:
+        connection = storage.create_connection()
+    except storage.StorageError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    try:
+        yield connection
+    finally:
+        connection.close()
 
 
 class TextGenerationRequest(BaseModel):
@@ -47,6 +59,19 @@ class VideoGenerationRequest(BaseModel):
     prompt: str
     duration: Optional[float] = Field(None, ge=1.0, le=60.0)
     size: Optional[str] = Field(None, description="Resolution, e.g. 1024x576")
+
+
+class DataRecordPayload(BaseModel):
+    name: str = Field(..., description="Nome del record", min_length=1, max_length=255)
+    value: str = Field(..., description="Valore associato", min_length=1)
+
+    @field_validator("name", "value")
+    @classmethod
+    def _strip_value(cls, raw: str) -> str:
+        cleaned = raw.strip()
+        if not cleaned:
+            raise ValueError("Il campo non può essere vuoto")
+        return cleaned
 
 
 class AcquisitionMethod(str, Enum):
@@ -124,6 +149,13 @@ async def settings_view(request: Request) -> HTMLResponse:
     )
 
 
+@app.get("/dati", response_class=HTMLResponse)
+async def data_view(request: Request) -> HTMLResponse:
+    return TEMPLATES.TemplateResponse(
+        "data.html", {"request": request, "active_nav": "data"}
+    )
+
+
 @app.get("/api/models")
 async def list_models(client: OpenRouterClient = Depends(get_client)) -> JSONResponse:
     try:
@@ -157,6 +189,49 @@ async def update_openrouter_config(payload: OpenRouterConfigRequest) -> Dict[str
     refreshed = await get_openrouter_config()
     refreshed["updated"] = updated
     return refreshed
+
+
+@app.get("/api/data")
+def list_data_records(connection=Depends(get_storage)) -> Dict[str, Any]:
+    records = storage.list_records(connection)
+    return {"items": records}
+
+
+@app.post("/api/data", status_code=status.HTTP_201_CREATED)
+def create_data_record(
+    payload: DataRecordPayload, connection=Depends(get_storage)
+) -> Dict[str, Any]:
+    record = storage.update_record(
+        connection,
+        name=payload.name,
+        value=payload.value,
+    )
+    return {"record": record}
+
+
+@app.put("/api/data/{record_id}")
+def update_data_record(
+    record_id: int, payload: DataRecordPayload, connection=Depends(get_storage)
+) -> Dict[str, Any]:
+    try:
+        record = storage.update_record(
+            connection,
+            record_id=record_id,
+            name=payload.name,
+            value=payload.value,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Record not found") from exc
+    return {"record": record}
+
+
+@app.delete("/api/data/{record_id}")
+def delete_data_record(record_id: int, connection=Depends(get_storage)) -> Dict[str, Any]:
+    try:
+        storage.delete_record(connection, record_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Record not found") from exc
+    return {"deleted": True}
 
 
 @app.post("/api/generate/text")

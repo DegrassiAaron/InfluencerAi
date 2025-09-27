@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gestione dati - AI Influencer Control Hub</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="header-bar">
+        <h1>Archivio dati</h1>
+        <nav class="app-nav">
+          <a href="/"{% if active_nav == "home" %} aria-current="page"{% endif %}
+            >Generazione contenuti</a
+          >
+          <a href="/influencer"{% if active_nav == "influencer" %} aria-current="page"{% endif %}
+            >Analisi influencer</a
+          >
+          <a href="/dati"{% if active_nav == "data" %} aria-current="page"{% endif %}
+            >Dati</a
+          >
+          <a href="/settings"{% if active_nav == "settings" %} aria-current="page"{% endif %}
+            >Impostazioni</a
+          >
+        </nav>
+      </div>
+      <p>
+        Crea, aggiorna e rimuovi elementi dell'archivio applicativo. I dati vengono
+        salvati in un database SQLite locale definito dall'ambiente
+        <code>DATA_DB_PATH</code>.
+      </p>
+    </header>
+
+    <main class="layout">
+      <section class="card">
+        <h2>Nuovo record</h2>
+        <form id="data-form" class="form" autocomplete="off">
+          <input type="hidden" id="record-id" name="id" />
+          <label>
+            Nome
+            <input
+              type="text"
+              id="record-name"
+              name="name"
+              required
+              maxlength="255"
+              placeholder="es. Campagna"
+            />
+          </label>
+          <label>
+            Valore
+            <textarea
+              id="record-value"
+              name="value"
+              rows="3"
+              required
+              placeholder="Inserisci il contenuto associato"
+            ></textarea>
+          </label>
+          <div class="form-actions">
+            <button type="submit" id="save-record">Salva record</button>
+            <button type="button" id="cancel-edit" class="button-secondary" hidden>
+              Annulla modifica
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Record salvati</h2>
+        <div id="data-status" class="status-message empty" role="status">
+          Nessun record presente.
+        </div>
+        <div class="table-wrapper">
+          <table id="data-table">
+            <thead>
+              <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Nome</th>
+                <th scope="col">Valore</th>
+                <th scope="col">Aggiornato</th>
+                <th scope="col" class="actions">Azioni</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="/static/data.js" type="module"></script>
+  </body>
+</html>

@@ -19,6 +19,14 @@ from ai_influencer.webapp.openrouter import OpenRouterError, summarize_models
 client = TestClient(app, raise_server_exceptions=False)
 
 
+@pytest.fixture()
+def temp_data_db(tmp_path, monkeypatch):
+    db_path = tmp_path / "data.sqlite"
+    monkeypatch.setenv("DATA_DB_PATH", str(db_path))
+    yield db_path
+    monkeypatch.delenv("DATA_DB_PATH", raising=False)
+
+
 def test_list_models_returns_summarized_payload_and_closes_client():
     class StubClient:
         def __init__(self) -> None:
@@ -312,6 +320,87 @@ def test_generate_image_handles_invalid_base64_and_closes_client():
     assert response.status_code == 500
     assert response.json() == {"detail": "Invalid image encoding"}
     assert stub_client.closed is True
+
+
+def test_data_api_returns_empty_collection(temp_data_db):
+    response = client.get("/api/data")
+
+    assert response.status_code == 200
+    assert response.json() == {"items": []}
+
+
+def test_data_api_create_update_and_list(temp_data_db):
+    create_response = client.post(
+        "/api/data",
+        json={"name": "Campagna", "value": "Descrizione iniziale"},
+    )
+
+    assert create_response.status_code == 201
+    created = create_response.json()["record"]
+    assert created["name"] == "Campagna"
+    assert created["value"] == "Descrizione iniziale"
+
+    list_response = client.get("/api/data")
+    assert list_response.status_code == 200
+    items = list_response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["id"] == created["id"]
+
+    update_response = client.put(
+        f"/api/data/{created['id']}",
+        json={"name": "Campagna", "value": "Aggiornato"},
+    )
+
+    assert update_response.status_code == 200
+    updated = update_response.json()["record"]
+    assert updated["value"] == "Aggiornato"
+    assert updated["id"] == created["id"]
+    assert updated["updated_at"] != created["updated_at"]
+
+
+def test_data_api_delete_record(temp_data_db):
+    create_response = client.post(
+        "/api/data",
+        json={"name": "Note", "value": "Da eliminare"},
+    )
+    assert create_response.status_code == 201
+    record_id = create_response.json()["record"]["id"]
+
+    delete_response = client.delete(f"/api/data/{record_id}")
+    assert delete_response.status_code == 200
+    assert delete_response.json() == {"deleted": True}
+
+    list_response = client.get("/api/data")
+    assert list_response.status_code == 200
+    assert list_response.json() == {"items": []}
+
+
+def test_data_api_handles_missing_record_errors(temp_data_db):
+    update_response = client.put(
+        "/api/data/999",
+        json={"name": "Fantasma", "value": "N/A"},
+    )
+    assert update_response.status_code == 404
+    assert update_response.json() == {"detail": "Record not found"}
+
+    delete_response = client.delete("/api/data/999")
+    assert delete_response.status_code == 404
+    assert delete_response.json() == {"detail": "Record not found"}
+
+
+def test_data_api_validates_payload(temp_data_db):
+    response = client.post("/api/data", json={"name": "", "value": ""})
+
+    assert response.status_code == 422
+
+
+def test_data_html_route_renders(temp_data_db):
+    response = client.get("/dati")
+
+    assert response.status_code == 200
+    body = response.text
+    assert "<table id=\"data-table\"" in body
+    assert "data.js" in body
 
 
 class StubVideoClient:
