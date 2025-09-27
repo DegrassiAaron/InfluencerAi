@@ -149,6 +149,56 @@ def test_generate_text_raises_on_failure_status() -> None:
     asyncio.run(scenario())
 
 
+def test_count_tokens_parses_usage_payload() -> None:
+    transport = make_transport(
+        {
+            "/tokenize": httpx.Response(
+                200,
+                json={
+                    "usage": {
+                        "prompt_tokens": 7,
+                        "completion_tokens": 3,
+                        "total_tokens": 10,
+                    }
+                },
+            )
+        }
+    )
+
+    async def scenario() -> None:
+        client = OpenRouterClient(transport=transport)
+
+        try:
+            result = await client.count_tokens("demo", "prompt")
+        finally:
+            await client.close()
+
+        assert result == {
+            "prompt_tokens": 7,
+            "completion_tokens": 3,
+            "total_tokens": 10,
+        }
+
+    asyncio.run(scenario())
+
+
+def test_count_tokens_raises_on_failure_status() -> None:
+    transport = make_transport(
+        {"/tokenize": httpx.Response(500, json={"error": "boom"})}
+    )
+
+    async def scenario() -> None:
+        client = OpenRouterClient(transport=transport)
+
+        try:
+            with pytest.raises(OpenRouterError):
+                await client.count_tokens("demo", "prompt")
+        finally:
+            await client.close()
+
+    asyncio.run(scenario())
+
+
 def test_generate_image_returns_payload() -> None:
     payload = {"data": [{"url": "http://example/image.png"}]}
     transport = make_transport({"/images": httpx.Response(200, json=payload)})

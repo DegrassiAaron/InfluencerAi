@@ -120,6 +120,71 @@ class OpenRouterClient:
             raise OpenRouterError(f"Unsupported message format: {message}")
         return content
 
+    async def count_tokens(self, model: str, prompt: str) -> Dict[str, int]:
+        payload = {"model": model, "input": prompt}
+        response = await self._client.post(
+            f"{self._base_url}/tokenize",
+            headers=self._headers(),
+            json=payload,
+        )
+        if response.status_code != httpx.codes.OK:
+            raise OpenRouterError(
+                f"Tokenization failed: {response.status_code} {response.text[:200]}"
+            )
+
+        data = response.json()
+        if not isinstance(data, dict):
+            raise OpenRouterError(f"Unexpected response payload: {data}")
+
+        usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
+
+        def _to_int(value: Any) -> Optional[int]:
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, (int, float)):
+                return int(value)
+            if isinstance(value, str):
+                try:
+                    return int(value)
+                except ValueError:
+                    return None
+            return None
+
+        prompt_tokens = _to_int(usage.get("prompt_tokens")) if usage else None
+        if prompt_tokens is None and usage:
+            prompt_tokens = _to_int(usage.get("input_tokens"))
+
+        completion_tokens = _to_int(usage.get("completion_tokens")) if usage else None
+        if completion_tokens is None and usage:
+            completion_tokens = _to_int(usage.get("output_tokens"))
+
+        total_tokens = _to_int(usage.get("total_tokens")) if usage else None
+
+        if total_tokens is None:
+            total_tokens = _to_int(data.get("token_count"))
+        if total_tokens is None:
+            tokens = data.get("tokens")
+            if isinstance(tokens, list):
+                total_tokens = len(tokens)
+
+        if total_tokens is None and prompt_tokens is not None and completion_tokens is not None:
+            total_tokens = prompt_tokens + completion_tokens
+
+        if total_tokens is None:
+            raise OpenRouterError(f"Unexpected response payload: {data}")
+
+        if prompt_tokens is None:
+            prompt_tokens = total_tokens
+
+        if completion_tokens is None:
+            completion_tokens = max(total_tokens - prompt_tokens, 0)
+
+        return {
+            "prompt_tokens": int(prompt_tokens),
+            "completion_tokens": int(completion_tokens),
+            "total_tokens": int(total_tokens),
+        }
+
     async def generate_image(
         self,
         *,
