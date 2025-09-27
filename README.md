@@ -194,6 +194,18 @@ Se non specifichi nulla verrà usato `/workspace/models/base/sdxl.safetensors`. 
 ## Control Hub web
 Il servizio `ai_influencer_webapp` fornisce un **Control Hub API-first** su [http://localhost:8000](http://localhost:8000). Tutte le interazioni avvengono via endpoint REST; l'interfaccia HTML è stata rimossa a favore della documentazione interattiva generata automaticamente.
 
+### Endpoint API
+| Endpoint | Metodo | Payload richiesto | Campi principali della risposta |
+| -------- | ------ | ----------------- | -------------------------------- |
+| `/api/models` | GET | Nessun payload. | Oggetto con chiave `models`, lista di modelli con `id`, `name`, `provider`, `capabilities`, `context_length`, `pricing`, `pricing_display`. |
+| `/api/generate/text` | POST | JSON `{ "model": string, "prompt": string }`. | Oggetto `{ "content": string }` con il testo generato. |
+| `/api/generate/image` | POST | JSON `{ "model": string, "prompt": string, "negative_prompt"?: string, "width": int, "height": int, "steps"?: int, "guidance"?: float }`. | Oggetto `{ "image": string, "is_remote": bool }`, dove `image` è base64 o URL remoto. |
+| `/api/generate/video` | POST | JSON `{ "model": string, "prompt": string, "duration"?: number, "size"?: string }`. | Oggetto `{ "video": string, "is_remote": bool }`, con base64 inline o URL streaming. |
+| `/api/influencer` | POST | JSON `{ "identifier": string, "method"?: "official" \| "scrape" }`. | Oggetto con `profile`, `metrics`, `media`, `identifier`, `method`, `retrieved_at`. `media` contiene schede con `id`, `titolo`, `tipo`, `testo_post`, `image_url`, `image_base64`, `thumbnail_url`, `success_score`, `original_url`, `pubblicato_il`, `transcript`. |
+| `/healthz` | GET | Nessun payload. | Oggetto `{ "status": "ok" }`. |
+
+Per i dettagli completi consulta [docs/funzionalita.rm](docs/funzionalita.rm).
+
 ### Swagger / OpenAPI
 - Avvia lo stack Docker (`docker compose -f ai_influencer/docker/docker-compose.yaml up -d`).
 - Apri <http://localhost:8000/docs> per accedere alla pagina Swagger auto-generata da FastAPI.
