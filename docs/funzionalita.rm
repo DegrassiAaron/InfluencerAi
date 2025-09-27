@@ -1,0 +1,246 @@
+# Funzionalità API del Control Hub
+
+Questo documento descrive in dettaglio tutti gli endpoint esposti da `ai_influencer/webapp/main.py`. Ogni sezione include metodo HTTP, URL, schema del payload, codici di risposta e casi di errore tipici. Gli esempi utilizzano JSON puro e possono essere eseguiti con `curl` o qualsiasi REST client.
+
+## Autenticazione e intestazioni comuni
+
+Tutti gli endpoint sono attualmente pubblici e non richiedono intestazioni di autenticazione dedicate. È consigliabile impostare comunque `Content-Type: application/json` per tutte le richieste `POST`.
+
+---
+
+## `GET /api/models`
+
+- **Metodo:** `GET`
+- **URL:** `/api/models`
+- **Body:** _nessuno_
+- **Risposte:**
+  - `200 OK` – Restituisce un oggetto con la chiave `models`, contenente la lista sintetica dei modelli supportati da OpenRouter.
+  - `500 Internal Server Error` – Errori imprevisti nel recupero dell'elenco (es. problemi di rete).
+
+**Esempio di risposta**
+```json
+{
+  "models": [
+    {
+      "id": "meta-llama/llama-3.1-70b-instruct",
+      "provider": "OpenRouter",
+      "type": "text"
+    }
+  ]
+}
+```
+
+**Note:** Il client interno (`OpenRouterClient`) chiude automaticamente la sessione HTTP al termine della chiamata.
+
+---
+
+## `POST /api/generate/text`
+
+- **Metodo:** `POST`
+- **URL:** `/api/generate/text`
+- **Body richiesto:**
+  - `model` *(stringa, obbligatoria)* – Identificativo del modello testuale OpenRouter da interrogare.
+  - `prompt` *(stringa, obbligatoria)* – Prompt da inviare al modello.
+- **Risposte:**
+  - `200 OK` – Restituisce `{"content": "..."}` con il testo generato.
+  - `502 Bad Gateway` – Propagato quando OpenRouter risponde con un errore (`OpenRouterError`).
+  - `422 Unprocessable Entity` – Body mancante o campi non validi.
+
+**Esempio di richiesta**
+```http
+POST /api/generate/text HTTP/1.1
+Content-Type: application/json
+
+{
+  "model": "meta-llama/llama-3.1-70b-instruct",
+  "prompt": "Genera 3 caption accattivanti per un reel su fitness" 
+}
+```
+
+**Esempio di risposta (200)**
+```json
+{
+  "content": "1. Trasforma ogni ripetizione in energia..."
+}
+```
+
+---
+
+## `POST /api/generate/image`
+
+- **Metodo:** `POST`
+- **URL:** `/api/generate/image`
+- **Body richiesto:**
+  - `model` *(stringa, obbligatoria)* – ID del modello di generazione immagini su OpenRouter.
+  - `prompt` *(stringa, obbligatoria)* – Prompt principale.
+  - `negative_prompt` *(stringa, opzionale)* – Prompt negativo per escludere elementi indesiderati.
+  - `width` *(intero, opzionale, default `1024`)* – Larghezza dell'immagine in pixel (256–2048).
+  - `height` *(intero, opzionale, default `1024`)* – Altezza dell'immagine in pixel (256–2048).
+  - `steps` *(intero, opzionale)* – Numero di passi di diffusione (1–100).
+  - `guidance` *(float, opzionale)* – Peso della guidance (0.0–50.0).
+- **Risposte:**
+  - `200 OK` – Restituisce un oggetto con chiavi `image` e `is_remote`.
+    - `image` può contenere una stringa base64 (se `is_remote` è `false`) oppure un URL remoto servito dal provider.
+    - `is_remote` indica se il payload deve essere scaricato separatamente (`true`) o può essere mostrato inline (`false`).
+  - `500 Internal Server Error` – Il payload ricevuto non è interpretabile (`Unexpected image payload` o `Invalid image encoding`).
+  - `502 Bad Gateway` – Errore upstream dal servizio OpenRouter.
+  - `422 Unprocessable Entity` – Validazione fallita sui campi (es. `width` fuori range).
+
+**Esempio di richiesta**
+```http
+POST /api/generate/image HTTP/1.1
+Content-Type: application/json
+
+{
+  "model": "black-forest-labs/flux-1.1-pro",
+  "prompt": "Ritratto cinematografico di un influencer tech in studio luci blu",
+  "negative_prompt": "immagine sfocata, artefatti",
+  "width": 1024,
+  "height": 1024,
+  "steps": 30,
+  "guidance": 7.5
+}
+```
+
+**Esempio di risposta (immagine inline)**
+```json
+{
+  "image": "iVBORw0KGgoAAAANSUhEUgAA...",
+  "is_remote": false
+}
+```
+
+**Esempio di risposta (URL remoto)**
+```json
+{
+  "image": "https://cdn.openrouter.ai/job/123/output.png",
+  "is_remote": true
+}
+```
+
+---
+
+## `POST /api/generate/video`
+
+- **Metodo:** `POST`
+- **URL:** `/api/generate/video`
+- **Body richiesto:**
+  - `model` *(stringa, obbligatoria)* – ID del modello video OpenRouter.
+  - `prompt` *(stringa, obbligatoria)* – Prompt principale.
+  - `duration` *(float, opzionale)* – Durata in secondi (1.0–60.0).
+  - `size` *(stringa, opzionale)* – Risoluzione desiderata (es. `1024x576`).
+- **Risposte:**
+  - `200 OK` – JSON con chiavi `video` e `is_remote`. Quando `is_remote` è `true`, `video` contiene un URL; quando è `false`, `video` contiene un blob base64 (`b64_json`).
+  - `500 Internal Server Error` – Payload non conforme (ad es. risposta priva di `data[0].url` o `data[0].b64_json`).
+  - `502 Bad Gateway` – Errore del provider OpenRouter durante la generazione.
+  - `422 Unprocessable Entity` – Validazione pydantic fallita.
+
+**Esempio di richiesta**
+```http
+POST /api/generate/video HTTP/1.1
+Content-Type: application/json
+
+{
+  "model": "lumaai/luma-ray-1",
+  "prompt": "Influencer virtuale che presenta un nuovo gadget in studio",
+  "duration": 8.5,
+  "size": "720x1280"
+}
+```
+
+**Esempio di risposta (URL remoto)**
+```json
+{
+  "video": "https://cdn.openrouter.ai/job/456/output.mp4",
+  "is_remote": true
+}
+```
+
+---
+
+## `POST /api/influencer`
+
+- **Metodo:** `POST`
+- **URL:** `/api/influencer`
+- **Body richiesto:**
+  - `identifier` *(stringa, obbligatoria)* – Username o URL del profilo da analizzare. Gli slash finali vengono normalizzati e l'handle è sempre restituito con `@`.
+  - `method` *(stringa, opzionale, default `"official"`)* – Modalità di acquisizione (`"official"` per API ufficiali, `"scrape"` per web scraping). Valida contro l'enum `AcquisitionMethod`.
+- **Risposte:**
+  - `200 OK` – Restituisce un payload strutturato con sezioni `profile`, `metrics`, `media`, `identifier`, `method` e `retrieved_at`.
+    - `profile` include `handle`, `nome`, `piattaforma`, `fonte_dati`.
+    - `metrics` riporta KPI sintetici (`follower`, `engagement_rate`, `crescita_30g`, `media_view`).
+    - `media` è una lista di 10 elementi con i contenuti top (campi principali: `id`, `titolo`, `tipo`, `testo_post`, `image_url`, `image_base64`, `thumbnail_url`, `success_score`, `original_url`, `pubblicato_il`, `transcript`).
+  - `404 Not Found` – Handle esplicito non trovato (es. contiene la parola `invalid`).
+  - `422 Unprocessable Entity` – Identificatore vuoto o impossibilità di ricavare l'handle.
+
+**Esempio di richiesta**
+```http
+POST /api/influencer HTTP/1.1
+Content-Type: application/json
+
+{
+  "identifier": "https://instagram.com/ai.creator",
+  "method": "scrape"
+}
+```
+
+**Esempio di risposta (estratto)**
+```json
+{
+  "profile": {
+    "handle": "@ai.creator",
+    "nome": "Ai Creator",
+    "piattaforma": "Instagram",
+    "fonte_dati": "Web scraping"
+  },
+  "metrics": {
+    "follower": 11250,
+    "engagement_rate": "5.61%",
+    "crescita_30g": "+900",
+    "media_view": 5062
+  },
+  "media": [
+    {
+      "id": "ai.creator-top-1",
+      "titolo": "Top contenuto #1 di Ai Creator",
+      "tipo": "immagine",
+      "image_url": "https://cdn.social.example/ai.creator/media/1.jpg",
+      "image_base64": "YWkuY3JlYXRvci0x",
+      "success_score": 120.5,
+      "original_url": "https://social.example/ai.creator/post/1",
+      "pubblicato_il": "2024-05-14T12:34:56+00:00",
+      "transcript": null
+    }
+  ],
+  "identifier": "ai.creator",
+  "method": "scrape",
+  "retrieved_at": "2024-05-14T12:35:02.123456+00:00"
+}
+```
+
+**Gestione errori:**
+- Se l'identificatore è vuoto o composto solo da spazi, viene restituito `422` con messaggio `"Identifier is required"`.
+- Se l'handle non può essere determinato (es. URL privo di username), viene restituito `422` con dettaglio `"Impossibile determinare l'handle"`.
+- Se l'handle contiene la stringa `invalid`, viene restituito `404` con `"Influencer non trovato"`.
+
+---
+
+## `GET /healthz`
+
+- **Metodo:** `GET`
+- **URL:** `/healthz`
+- **Body:** _nessuno_
+- **Risposte:**
+  - `200 OK` – JSON `{ "status": "ok" }`.
+
+**Note:** Endpoint di readiness/liveness semplice, utile per health check orchestrator.
+
+---
+
+## Suggerimenti operativi
+
+- Tutte le risposte hanno `Content-Type: application/json`.
+- Campi temporali (`retrieved_at`, `pubblicato_il`) sono formattati in ISO 8601 con timezone UTC.
+- Gli esempi sono fittizi: sostituisci modelli, URL e handle con valori reali al momento dell'integrazione.
+
+Per ulteriori dettagli sui modelli OpenRouter e sugli alias disponibili, consulta anche [README_OPENROUTER.md](../README_OPENROUTER.md).
