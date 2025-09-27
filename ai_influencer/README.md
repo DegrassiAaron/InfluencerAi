@@ -24,7 +24,7 @@ Questo documento accompagna la cartella `ai_influencer/` e descrive nel dettagli
 - **Script CLI** (`scripts/`): contengono gli step atomici della pipeline (preparazione dataset, generazione OpenRouter, QC, augment, training) e gli script PowerShell per Windows.
 - **Prompt bank** (`scripts/prompt_bank.yaml`): archivio di persona, scene, luci, pose e outfit utilizzato dagli script OpenRouter per costruire prompt coerenti.
 - **Control Hub web** (`webapp/`): FastAPI + frontend statico per esplorare modelli, lanciare generazioni e simulare analisi profili.
-- **Workflow n8n** (`n8n/flow.json`): esegue gli script principali tramite webhook per scenari automatizzati.
+- **Workflow n8n** (`n8n/flow.json` + servizio Docker `n8n_local`): esegue gli script principali tramite webhook orchestrando i container `ai_influencer_tools` e `kohya_local` via `docker exec`.
 
 ## Prerequisiti
 - GPU NVIDIA con driver recenti e supporto CUDA (12.x consigliato).
@@ -173,16 +173,41 @@ python3 scripts/gui_app.py
 ```
 
 ## Automazione via n8n
-`n8n/flow.json` definisce un webhook (`/ai-influencer-hybrid`) che:
-1. Riceve la richiesta HTTP.
-2. Esegue `python3 scripts/prepare_dataset.py ...` nel container tramite nodo `executeCommand`.
-3. Avvia `python3 scripts/openrouter_batch.py ...` per popolare `data/synth_openrouter`.
-4. Lancia `bash scripts/train_lora.sh`.
-5. (Ulteriori nodi possono essere collegati per QC/augment).
+Lo stack Docker include ora il servizio `n8n_local` (porta `5678`) basato sull'immagine `n8nio/n8n`. Il container è preconfigurato con autenticazione Basic (variabili `N8N_BASIC_AUTH_*`) e monta automaticamente `n8n/flow.json` per l'import iniziale del workflow.
 
-Il nodo "Train LoRA" accetta nel payload JSON un campo opzionale `base_model` per inoltrare il percorso al flag `--base-model`; in assenza del campo viene usato il default `/workspace/models/base/sdxl.safetensors`.
+### Avvio rapido
+1. Avvia i container principali:
+   ```bash
+   docker compose -f docker/docker-compose.yaml up -d
+   ```
+2. (Solo al primo avvio) importa il workflow fornito nel repository:
+   ```bash
+   docker exec n8n_local n8n import:workflow --input /imports/flow.json --force
+   ```
+3. Apri <http://localhost:5678> e accedi con le credenziali definite in `N8N_BASIC_AUTH_USER` / `N8N_BASIC_AUTH_PASSWORD` (default `admin` / `admin`). Dalla UI puoi rinominare il workflow, attivarlo e monitorare l'esecuzione.
 
-Importa il file in n8n, aggiorna percorsi/comandi in base alla tua infrastruttura Docker e proteggi il webhook con credenziali.
+Il webhook esposto è `/webhook/ai-influencer-hybrid` (versione test `/webhook-test/...`). Ogni nodo `Execute Command` effettua un `docker exec` verso i container specializzati:
+
+| Nodo | Comando eseguito |
+| ---- | ---------------- |
+| `Docker Exec - Clean` | `docker exec -w /workspace ai_influencer_tools python3 scripts/prepare_dataset.py ...` |
+| `OpenRouter Batch` | `docker exec -w /workspace ai_influencer_tools python3 scripts/openrouter_batch.py ...` |
+| `QC Face` | `docker exec -w /workspace ai_influencer_tools python3 scripts/qc_face_sim.py ...` |
+| `Augment+Caption` | `docker exec -w /workspace ai_influencer_tools python3 scripts/augment_and_caption.py ...` |
+| `Train LoRA` | `docker exec -w /workspace kohya_local bash -lc 'BASE_MODEL="..." bash scripts/train_lora.sh'` |
+
+In assenza del campo JSON `base_model`, il nodo "Train LoRA" usa il default `/workspace/models/base/sdxl.safetensors`. Per lanciare l'intera pipeline da terminale:
+
+```bash
+curl -u "${N8N_BASIC_AUTH_USER:-admin}:${N8N_BASIC_AUTH_PASSWORD:-admin}" \
+  -X POST "http://localhost:5678/webhook/ai-influencer-hybrid" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "base_model": "/workspace/models/base/dreamshaper_xl.safetensors"
+      }'
+```
+
+Personalizza le variabili `OPENROUTER_*` e assicurati che i container `ai_influencer_tools` e `kohya_local` siano in stato `healthy` prima di invocare il webhook.
 
 ## Suggerimenti e note operative
 - Mantieni il modello SDXL base fuori dal versionamento Git per motivi di licenza.

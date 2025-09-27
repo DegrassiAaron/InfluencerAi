@@ -72,3 +72,32 @@ services:
       "
     ports:
       - "8000:8000"
+
+  n8n:
+    build:
+      context: ..
+      dockerfile: docker/n8n.Dockerfile
+    container_name: n8n_local
+    depends_on:
+      - tools
+      - kohya
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_BASIC_AUTH_ACTIVE=${N8N_BASIC_AUTH_ACTIVE:-true}
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-admin}
+      - N8N_USER_FOLDER=/data
+      - N8N_IMPORT_EXPORT_DIR=/imports
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678/}
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/data
+      - ../n8n:/imports
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+volumes:
+  n8n_data:
