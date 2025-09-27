@@ -6,6 +6,7 @@ import os
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -97,7 +98,7 @@ def _mask_secret(secret: Optional[str]) -> Optional[str]:
     return "*" * (len(secret) - 4) + secret[-4:]
 
 
-class OpenRouterConfigRequest(BaseModel):
+class ServiceUpdateRequest(BaseModel):
     api_key: Optional[str] = Field(
         default=None, description="OpenRouter API key", min_length=1
     )
@@ -116,10 +117,86 @@ class OpenRouterConfigRequest(BaseModel):
         return stripped
 
     @model_validator(mode="after")
-    def _ensure_payload(self) -> "OpenRouterConfigRequest":
+    def _ensure_payload(self) -> "ServiceUpdateRequest":
         if self.api_key is None and self.base_url is None:
             raise ValueError("Provide at least one value to update")
         return self
+
+
+@dataclass
+class ServiceDefinition:
+    """Registry entry describing how to manage a third-party service."""
+
+    name: str
+    display_name: str
+    api_key_env: Optional[str] = None
+    base_url_env: Optional[str] = None
+
+    def _current_api_key(self) -> Optional[str]:
+        return os.environ.get(self.api_key_env) if self.api_key_env else None
+
+    def _current_base_url(self) -> Optional[str]:
+        if not self.base_url_env:
+            return None
+        value = os.environ.get(self.base_url_env)
+        return value or None
+
+    def describe(self, *, updated: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        api_key = self._current_api_key()
+        base_url = self._current_base_url()
+        payload: Dict[str, Any] = {
+            "service": self.name,
+            "display_name": self.display_name,
+            "has_api_key": bool(api_key),
+            "api_key_preview": _mask_secret(api_key),
+            "base_url": base_url,
+            "environment": {},
+        }
+        if self.api_key_env:
+            payload["environment"][self.api_key_env] = bool(api_key)
+        if self.base_url_env:
+            payload["environment"][self.base_url_env] = base_url
+        if updated is not None:
+            payload["updated"] = updated
+        return payload
+
+    def update(self, update: ServiceUpdateRequest) -> Dict[str, Any]:
+        updated: Dict[str, Any] = {}
+        if update.api_key is not None and self.api_key_env:
+            os.environ[self.api_key_env] = update.api_key
+            updated["api_key"] = True
+        if update.base_url is not None and self.base_url_env:
+            os.environ[self.base_url_env] = str(update.base_url)
+            updated["base_url"] = str(update.base_url)
+        return self.describe(updated=updated)
+
+
+SERVICE_REGISTRY: Dict[str, ServiceDefinition] = {
+    "openrouter": ServiceDefinition(
+        name="openrouter",
+        display_name="OpenRouter",
+        api_key_env="OPENROUTER_API_KEY",
+        base_url_env="OPENROUTER_BASE_URL",
+    )
+}
+
+
+def _get_service_or_404(service_name: str) -> ServiceDefinition:
+    try:
+        return SERVICE_REGISTRY[service_name]
+    except KeyError as exc:  # pragma: no cover - defensive branch
+        raise HTTPException(status_code=404, detail=f"Unknown service '{service_name}'") from exc
+
+
+def _legacy_openrouter_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    legacy: Dict[str, Any] = {
+        "has_api_key": data["has_api_key"],
+        "api_key_preview": data["api_key_preview"],
+        "base_url": data.get("base_url"),
+    }
+    if "updated" in data:
+        legacy["updated"] = data["updated"]
+    return legacy
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -165,30 +242,30 @@ async def list_models(client: OpenRouterClient = Depends(get_client)) -> JSONRes
     return JSONResponse({"models": summarize_models(models)})
 
 
+@app.get("/api/services/{service_name}")
+async def get_service_config(service_name: str) -> Dict[str, Any]:
+    service = _get_service_or_404(service_name)
+    return service.describe()
+
+
+@app.post("/api/services/{service_name}")
+async def update_service_config(
+    service_name: str, payload: ServiceUpdateRequest
+) -> Dict[str, Any]:
+    service = _get_service_or_404(service_name)
+    return service.update(payload)
+
+
 @app.get("/api/config/openrouter")
 async def get_openrouter_config() -> Dict[str, Any]:
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    base_url = os.environ.get("OPENROUTER_BASE_URL")
-    return {
-        "has_api_key": bool(api_key),
-        "api_key_preview": _mask_secret(api_key),
-        "base_url": base_url or None,
-    }
+    service = _get_service_or_404("openrouter")
+    return _legacy_openrouter_payload(service.describe())
 
 
 @app.post("/api/config/openrouter")
-async def update_openrouter_config(payload: OpenRouterConfigRequest) -> Dict[str, Any]:
-    updated: Dict[str, Any] = {}
-    if payload.api_key is not None:
-        os.environ["OPENROUTER_API_KEY"] = payload.api_key
-        updated["api_key"] = True
-    if payload.base_url is not None:
-        os.environ["OPENROUTER_BASE_URL"] = str(payload.base_url)
-        updated["base_url"] = str(payload.base_url)
-
-    refreshed = await get_openrouter_config()
-    refreshed["updated"] = updated
-    return refreshed
+async def update_openrouter_config(payload: ServiceUpdateRequest) -> Dict[str, Any]:
+    service = _get_service_or_404("openrouter")
+    return _legacy_openrouter_payload(service.update(payload))
 
 
 @app.get("/api/data")

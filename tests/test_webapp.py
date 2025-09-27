@@ -232,6 +232,26 @@ def test_get_openrouter_config_returns_masked_values(monkeypatch):
     assert payload["base_url"] == "https://api.openrouter.ai"
 
 
+def test_service_registry_get_returns_expected_payload(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-7890")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://service.example/api")
+
+    response = client.get("/api/services/openrouter")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["service"] == "openrouter"
+    assert payload["display_name"] == "OpenRouter"
+    assert payload["has_api_key"] is True
+    assert payload["api_key_preview"].endswith("7890")
+    assert payload["base_url"] == "https://service.example/api"
+    assert payload["environment"]["OPENROUTER_API_KEY"] is True
+    assert (
+        payload["environment"]["OPENROUTER_BASE_URL"]
+        == "https://service.example/api"
+    )
+
+
 def test_get_storage_error_returns_500(monkeypatch):
     original_overrides = dict(app.dependency_overrides)
     original_create_connection = storage.create_connection
@@ -274,6 +294,29 @@ def test_update_openrouter_config_updates_environment(monkeypatch):
         "api_key": True,
         "base_url": "https://example.com/api/v1",
     }
+
+
+def test_service_registry_post_updates_environment(monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
+
+    response = client.post(
+        "/api/services/openrouter",
+        json={
+            "api_key": "sk-service-5555",
+            "base_url": "https://registry.example/api",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["service"] == "openrouter"
+    assert payload["updated"] == {
+        "api_key": True,
+        "base_url": "https://registry.example/api",
+    }
+    assert os.environ["OPENROUTER_API_KEY"] == "sk-service-5555"
+    assert os.environ["OPENROUTER_BASE_URL"] == "https://registry.example/api"
 
 
 def test_update_openrouter_config_allows_base_url_only(monkeypatch):
