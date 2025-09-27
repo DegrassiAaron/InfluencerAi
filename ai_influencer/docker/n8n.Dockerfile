@@ -1,4 +1,4 @@
-FROM n8nio/n8n:1.68.3
+FROM n8nio/n8n:1.113.3
 
 USER root
 RUN apt-get update \
