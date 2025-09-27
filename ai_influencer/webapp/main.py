@@ -7,14 +7,20 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import AnyHttpUrl, BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    AnyHttpUrl,
+    BaseModel,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from ai_influencer.webapp import storage
 from ai_influencer.webapp.openrouter import (
@@ -100,36 +106,16 @@ def _mask_secret(secret: Optional[str]) -> Optional[str]:
 
 
 
-@dataclass(frozen=True)
-class ServiceMetadata:
-    """Static metadata describing a configurable external service."""
-
-    id: str
-    display_name: str
-    default_endpoint: Optional[str]
-    api_key_env: Optional[str]
-    endpoint_env: Optional[str]
-
-
-SERVICE_REGISTRY: Dict[str, ServiceMetadata] = {
-    "openrouter": ServiceMetadata(
-        id="openrouter",
-        display_name="OpenRouter",
-        default_endpoint="https://openrouter.ai/api/v1",
-        api_key_env="OPENROUTER_API_KEY",
-        endpoint_env="OPENROUTER_BASE_URL",
-    ),
-}
-
-
 class ServiceUpdateRequest(BaseModel):
     """Payload used to update the configuration of an external service."""
 
     api_key: Optional[str] = Field(
         default=None, description="Service API key", min_length=1
     )
-    endpoint: Optional[AnyHttpUrl] = Field(
-        default=None, description="Override service endpoint"
+    base_url: Optional[AnyHttpUrl] = Field(
+        default=None,
+        description="Override service base URL",
+        validation_alias=AliasChoices("base_url", "endpoint"),
     )
     base_url: Optional[AnyHttpUrl] = Field(
         default=None, description="Override service base URL"
@@ -146,9 +132,9 @@ class ServiceUpdateRequest(BaseModel):
             raise ValueError("API key must not be empty")
         return value
 
-    @field_validator("endpoint", mode="before")
+    @field_validator("base_url", mode="before")
     @classmethod
-    def _normalize_endpoint(cls, value: Optional[str]) -> Optional[str]:
+    def _normalize_base_url(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return None
         if isinstance(value, str):
@@ -174,6 +160,9 @@ class ServiceUpdateRequest(BaseModel):
     def _ensure_payload(self) -> "ServiceUpdateRequest":
 
         api_key_provided = "api_key" in self.model_fields_set
+        base_url_provided = "base_url" in self.model_fields_set
+
+
         endpoint_provided = "endpoint" in self.model_fields_set
         base_url_provided = "base_url" in self.model_fields_set
 
@@ -185,31 +174,6 @@ class ServiceUpdateRequest(BaseModel):
 
 
 
-def _serialize_service(metadata: ServiceMetadata) -> Dict[str, Any]:
-    api_key_value = (
-        os.environ.get(metadata.api_key_env) if metadata.api_key_env else None
-    )
-    endpoint_override = (
-        os.environ.get(metadata.endpoint_env) if metadata.endpoint_env else None
-    )
-    resolved_endpoint = endpoint_override or metadata.default_endpoint
-    env_keys: Dict[str, str] = {}
-    if metadata.api_key_env:
-        env_keys["api_key"] = metadata.api_key_env
-    if metadata.endpoint_env:
-        env_keys["endpoint"] = metadata.endpoint_env
-
-    return {
-        "id": metadata.id,
-        "name": metadata.display_name,
-        "endpoint": resolved_endpoint,
-        "default_endpoint": metadata.default_endpoint,
-        "uses_default_endpoint": endpoint_override is None,
-        "env": env_keys,
-        "has_api_key": bool(api_key_value),
-        "api_key_preview": _mask_secret(api_key_value),
-    }
-
 @dataclass
 class ServiceDefinition:
     """Registry entry describing how to manage a third-party service."""
@@ -218,19 +182,27 @@ class ServiceDefinition:
     display_name: str
     api_key_env: Optional[str] = None
     base_url_env: Optional[str] = None
+    default_base_url: Optional[str] = None
 
     def _current_api_key(self) -> Optional[str]:
         return os.environ.get(self.api_key_env) if self.api_key_env else None
 
-    def _current_base_url(self) -> Optional[str]:
+    def _base_url_override(self) -> Optional[str]:
         if not self.base_url_env:
             return None
         value = os.environ.get(self.base_url_env)
         return value or None
 
+    def _resolved_base_url(self) -> Optional[str]:
+        override = self._base_url_override()
+        if override:
+            return override
+        return self.default_base_url
+
     def describe(self, *, updated: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         api_key = self._current_api_key()
-        base_url = self._current_base_url()
+        base_url_override = self._base_url_override()
+        base_url = self._resolved_base_url()
         payload: Dict[str, Any] = {
             "service": self.name,
             "display_name": self.display_name,
@@ -242,24 +214,56 @@ class ServiceDefinition:
         if self.api_key_env:
             payload["environment"][self.api_key_env] = bool(api_key)
         if self.base_url_env:
-            payload["environment"][self.base_url_env] = base_url
+            payload["environment"][self.base_url_env] = (
+                base_url_override if base_url_override is not None else self.default_base_url
+            )
         if updated is not None:
             payload["updated"] = updated
         return payload
+
+    def to_registry_payload(self) -> Dict[str, Any]:
+        api_key = self._current_api_key()
+        base_url_override = self._base_url_override()
+        resolved_endpoint = self._resolved_base_url()
+        env_keys: Dict[str, str] = {}
+        if self.api_key_env:
+            env_keys["api_key"] = self.api_key_env
+        if self.base_url_env:
+            env_keys["endpoint"] = self.base_url_env
+
+        return {
+            "id": self.name,
+            "name": self.display_name,
+            "endpoint": resolved_endpoint,
+            "default_endpoint": self.default_base_url,
+            "uses_default_endpoint": base_url_override is None,
+            "env": env_keys,
+            "has_api_key": bool(api_key),
+            "api_key_preview": _mask_secret(api_key),
+        }
 
     def update(self, update: ServiceUpdateRequest) -> Dict[str, Any]:
         updated: Dict[str, Any] = {}
         if update.api_key is not None and self.api_key_env:
             os.environ[self.api_key_env] = update.api_key
             updated["api_key"] = True
-        if "base_url" in update.model_fields_set and self.base_url_env:
+
+        base_url_provided = "base_url" in update.model_fields_set
+        if base_url_provided:
+            if self.base_url_env is None:
+                raise HTTPException(
+                    status_code=400, detail="Service does not accept endpoint overrides"
+                )
+
             if update.base_url is None:
                 os.environ.pop(self.base_url_env, None)
                 updated["base_url"] = None
             else:
                 os.environ[self.base_url_env] = str(update.base_url)
                 updated["base_url"] = str(update.base_url)
-        return self.describe(updated=updated)
+
+        return self.describe(updated=updated or None)
+
 
 
 SERVICE_REGISTRY: Dict[str, ServiceDefinition] = {
@@ -268,6 +272,7 @@ SERVICE_REGISTRY: Dict[str, ServiceDefinition] = {
         display_name="OpenRouter",
         api_key_env="OPENROUTER_API_KEY",
         base_url_env="OPENROUTER_BASE_URL",
+        default_base_url="https://openrouter.ai/api/v1",
     )
 }
 
@@ -336,7 +341,7 @@ async def list_models(client: OpenRouterClient = Depends(get_client)) -> JSONRes
 
 @app.get("/api/config/services")
 async def list_configurable_services() -> Dict[str, Any]:
-    services = [_serialize_service(metadata) for metadata in SERVICE_REGISTRY.values()]
+    services = [service.to_registry_payload() for service in SERVICE_REGISTRY.values()]
     return {"services": services}
 
 
@@ -344,35 +349,11 @@ async def list_configurable_services() -> Dict[str, Any]:
 async def update_service_configuration(
     service_id: str, payload: ServiceUpdateRequest
 ) -> Dict[str, Any]:
-    metadata = SERVICE_REGISTRY.get(service_id)
-    if metadata is None:
-        raise HTTPException(status_code=404, detail="Service not found")
-
-    updated: Dict[str, Any] = {}
-    if payload.api_key is not None:
-        if metadata.api_key_env is None:
-            raise HTTPException(
-                status_code=400, detail="Service does not accept API keys"
-            )
-        os.environ[metadata.api_key_env] = payload.api_key
-        updated["api_key"] = True
-
-    endpoint_provided = "endpoint" in payload.model_fields_set
-    if endpoint_provided:
-        if metadata.endpoint_env is None:
-            raise HTTPException(
-                status_code=400, detail="Service does not accept endpoint overrides"
-            )
-        if payload.endpoint is None:
-            os.environ.pop(metadata.endpoint_env, None)
-            updated["endpoint"] = None
-        else:
-            os.environ[metadata.endpoint_env] = str(payload.endpoint)
-            updated["endpoint"] = str(payload.endpoint)
-
+    service = _get_service_or_404(service_id)
+    result = service.update(payload)
     return {
-        "service": _serialize_service(metadata),
-        "updated": updated,
+        "service": service.to_registry_payload(),
+        "updated": result.get("updated", {}),
     }
 
 @app.get("/api/services/{service_name}")
