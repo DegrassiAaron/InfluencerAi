@@ -6,13 +6,10 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.responses import JSONResponse
 from pydantic import (
     AliasChoices,
     AnyHttpUrl,
@@ -314,40 +311,6 @@ def _legacy_openrouter_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     if "updated" in data:
         legacy["updated"] = data["updated"]
     return legacy
-
-
-BASE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = BASE_DIR / "static"
-TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-
-@app.get("/", response_class=HTMLResponse)
-async def index(request: Request) -> HTMLResponse:
-    return TEMPLATES.TemplateResponse(
-        "index.html", {"request": request, "active_nav": "home"}
-    )
-
-
-@app.get("/influencer", response_class=HTMLResponse)
-async def influencer_view(request: Request) -> HTMLResponse:
-    return TEMPLATES.TemplateResponse(
-        "influencer.html", {"request": request, "active_nav": "influencer"}
-    )
-
-
-@app.get("/settings", response_class=HTMLResponse)
-async def settings_view(request: Request) -> HTMLResponse:
-    return TEMPLATES.TemplateResponse(
-        "settings.html", {"request": request, "active_nav": "settings"}
-    )
-
-
-@app.get("/dati", response_class=HTMLResponse)
-async def data_view(request: Request) -> HTMLResponse:
-    return TEMPLATES.TemplateResponse(
-        "data.html", {"request": request, "active_nav": "data"}
-    )
 
 
 @app.get("/api/models")
