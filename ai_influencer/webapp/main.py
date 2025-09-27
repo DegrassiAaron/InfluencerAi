@@ -19,6 +19,15 @@ from ai_influencer.webapp.openrouter import (
     OpenRouterError,
     summarize_models,
 )
+from ai_influencer.webapp.storage import (
+    DataStorage,
+    create_data,
+    delete_data,
+    get_data,
+    get_storage,
+    list_data,
+    update_data,
+)
 
 app = FastAPI(title="AI Influencer Control Hub")
 
@@ -121,6 +130,13 @@ async def influencer_view(request: Request) -> HTMLResponse:
 async def settings_view(request: Request) -> HTMLResponse:
     return TEMPLATES.TemplateResponse(
         "settings.html", {"request": request, "active_nav": "settings"}
+    )
+
+
+@app.get("/dati", response_class=HTMLResponse)
+async def data_view(request: Request) -> HTMLResponse:
+    return TEMPLATES.TemplateResponse(
+        "data.html", {"request": request, "active_nav": "data"}
     )
 
 
@@ -346,6 +362,62 @@ async def influencer_lookup(payload: InfluencerLookupRequest) -> JSONResponse:
     }
 
     return JSONResponse(payload_data)
+
+
+@app.get("/api/data")
+async def list_data_endpoint(
+    storage: DataStorage = Depends(get_storage),
+) -> Dict[str, Any]:
+    return {"items": list_data(storage)}
+
+
+@app.post("/api/data", status_code=201)
+async def create_data_endpoint(
+    payload: Dict[str, Any],
+    storage: DataStorage = Depends(get_storage),
+) -> JSONResponse:
+    if not isinstance(payload, dict) or not payload:
+        raise HTTPException(status_code=400, detail="Il payload deve contenere dati")
+    created = create_data(storage, payload)
+    return JSONResponse(status_code=201, content=created)
+
+
+@app.get("/api/data/{data_id}")
+async def get_data_endpoint(
+    data_id: int,
+    storage: DataStorage = Depends(get_storage),
+) -> Dict[str, Any]:
+    item = get_data(storage, data_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Dato non trovato")
+    return item
+
+
+@app.put("/api/data/{data_id}")
+async def update_data_endpoint(
+    data_id: int,
+    payload: Dict[str, Any],
+    storage: DataStorage = Depends(get_storage),
+) -> Dict[str, Any]:
+    if not isinstance(payload, dict) or not payload:
+        raise HTTPException(
+            status_code=400, detail="Il payload deve contenere almeno un campo"
+        )
+    updated = update_data(storage, data_id, payload)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Dato non trovato")
+    return updated
+
+
+@app.delete("/api/data/{data_id}")
+async def delete_data_endpoint(
+    data_id: int,
+    storage: DataStorage = Depends(get_storage),
+) -> Dict[str, Any]:
+    removed = delete_data(storage, data_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Dato non trovato")
+    return {"deleted": True}
 
 
 @app.get("/healthz")
