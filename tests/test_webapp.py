@@ -10,12 +10,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from fastapi.testclient import TestClient
 import pytest
 
+from ai_influencer.webapp.main import INFLUENCER_STORE, app, get_client
+
 from ai_influencer.webapp.influencers import get_influencer_store
-from ai_influencer.webapp.main import app, get_client
+
 from ai_influencer.webapp.openrouter import OpenRouterError, summarize_models
 
 
 client = TestClient(app, raise_server_exceptions=False)
+
+DEFAULT_CONTEXT = {
+    "story": "Creatrice digitale che ama sperimentare con estetiche futuristiche.",
+    "personality": "Voce empatica e curiosa, capace di trasmettere energia positiva.",
+}
 
 
 def test_healthcheck_returns_ok_payload():
@@ -178,8 +185,10 @@ class StubVideoClient:
         self._result = result
         self._error = error
         self.closed = False
+        self.calls: list[dict] = []
 
     async def generate_video(self, **kwargs):
+        self.calls.append(kwargs)
         if self._error is not None:
             raise self._error
         return self._result
@@ -211,7 +220,7 @@ def test_generate_image_returns_remote_url_and_closes_client():
     try:
         response = client.post(
             "/api/generate/image",
-            json={"model": "stub", "prompt": "draw"},
+            json={"model": "stub", "prompt": "draw", **DEFAULT_CONTEXT},
         )
     finally:
         reset_overrides()
@@ -221,6 +230,10 @@ def test_generate_image_returns_remote_url_and_closes_client():
         "image": "https://cdn.example.com/image.png",
         "is_remote": True,
     }
+    assert len(stub_client.calls) == 1
+    prompt = stub_client.calls[0]["prompt"]
+    assert DEFAULT_CONTEXT["story"] in prompt
+    assert DEFAULT_CONTEXT["personality"] in prompt
     assert stub_client.closed is True
 
 
@@ -235,13 +248,17 @@ def test_generate_image_returns_inline_base64_and_closes_client():
     try:
         response = client.post(
             "/api/generate/image",
-            json={"model": "stub", "prompt": "draw"},
+            json={"model": "stub", "prompt": "draw", **DEFAULT_CONTEXT},
         )
     finally:
         reset_overrides()
 
     assert response.status_code == 200
     assert response.json() == {"image": inline, "is_remote": False}
+    assert len(stub_client.calls) == 1
+    prompt = stub_client.calls[0]["prompt"]
+    assert DEFAULT_CONTEXT["story"] in prompt
+    assert DEFAULT_CONTEXT["personality"] in prompt
     assert stub_client.closed is True
 
 
@@ -255,7 +272,7 @@ def test_generate_image_handles_missing_payload_and_closes_client():
     try:
         response = client.post(
             "/api/generate/image",
-            json={"model": "stub", "prompt": "draw"},
+            json={"model": "stub", "prompt": "draw", **DEFAULT_CONTEXT},
         )
     finally:
         reset_overrides()
@@ -277,7 +294,7 @@ def test_generate_image_handles_invalid_base64_and_closes_client():
     try:
         response = client.post(
             "/api/generate/image",
-            json={"model": "stub", "prompt": "draw"},
+            json={"model": "stub", "prompt": "draw", **DEFAULT_CONTEXT},
         )
     finally:
         reset_overrides()
@@ -287,32 +304,34 @@ def test_generate_image_handles_invalid_base64_and_closes_client():
     assert stub_client.closed is True
 
 
-class StubVideoClient:
-    """Minimal stub implementing the OpenRouter video client interface."""
+def test_generate_image_enriches_prompt_with_store_context():
+    stub_client = StubImageClient(
+        result={"data": [{"url": "https://cdn.example.com/store.png"}]}
+    )
 
-    def __init__(self, result=None, error: Optional[Exception] = None):
-        self._result = result
-        self._error = error
-        self.closed = False
+    async def _override() -> StubImageClient:
+        return stub_client
 
-    async def generate_video(self, **kwargs):
-        if self._error is not None:
-            raise self._error
-        return self._result
+    app.dependency_overrides[get_client] = _override
+    try:
+        response = client.post(
+            "/api/generate/image",
+            json={
+                "model": "stub",
+                "prompt": "Visionary portrait",
+                "influencer_id": "Aurora_Rise",
+            },
+        )
+    finally:
+        reset_overrides()
 
-    async def close(self):
-        self.closed = True
-
-
-def override_client(client_stub: StubVideoClient) -> None:
-    async def _get_client() -> StubVideoClient:
-        return client_stub
-
-    app.dependency_overrides[get_client] = _get_client
-
-
-def reset_overrides() -> None:
-    app.dependency_overrides.pop(get_client, None)
+    assert response.status_code == 200
+    assert stub_client.closed is True
+    assert len(stub_client.calls) == 1
+    prompt = stub_client.calls[0]["prompt"]
+    context = INFLUENCER_STORE["aurora_rise"]
+    assert context["story"] in prompt
+    assert context["personality"] in prompt
 
 
 def test_create_influencer_persists_story_and_personality() -> None:
@@ -452,7 +471,11 @@ def test_generate_video_returns_remote_url():
     try:
         response = client.post(
             "/api/generate/video",
-            json={"model": "demo/video", "prompt": "A sunny day"},
+            json={
+                "model": "demo/video",
+                "prompt": "A sunny day",
+                **DEFAULT_CONTEXT,
+            },
         )
     finally:
         reset_overrides()
@@ -462,6 +485,10 @@ def test_generate_video_returns_remote_url():
         "video": "https://cdn.example/video.mp4",
         "is_remote": True,
     }
+    assert len(stub.calls) == 1
+    prompt = stub.calls[0]["prompt"]
+    assert DEFAULT_CONTEXT["story"] in prompt
+    assert DEFAULT_CONTEXT["personality"] in prompt
     assert stub.closed is True
 
 
@@ -471,7 +498,11 @@ def test_generate_video_returns_inline_base64_payload():
     try:
         response = client.post(
             "/api/generate/video",
-            json={"model": "demo/video", "prompt": "A futuristic city"},
+            json={
+                "model": "demo/video",
+                "prompt": "A futuristic city",
+                **DEFAULT_CONTEXT,
+            },
         )
     finally:
         reset_overrides()
@@ -481,7 +512,35 @@ def test_generate_video_returns_inline_base64_payload():
         "video": "ZmFrZS12aWRlby1kYXRh",
         "is_remote": False,
     }
+    assert len(stub.calls) == 1
+    prompt = stub.calls[0]["prompt"]
+    assert DEFAULT_CONTEXT["story"] in prompt
+    assert DEFAULT_CONTEXT["personality"] in prompt
     assert stub.closed is True
+
+
+def test_generate_video_enriches_prompt_with_store_context():
+    stub = StubVideoClient({"data": [{"url": "https://cdn.example/store-video.mp4"}]})
+    override_client(stub)
+    try:
+        response = client.post(
+            "/api/generate/video",
+            json={
+                "model": "demo/video",
+                "prompt": "Create a teaser",
+                "influencer_id": "Aurora_Rise",
+            },
+        )
+    finally:
+        reset_overrides()
+
+    assert response.status_code == 200
+    assert stub.closed is True
+    assert len(stub.calls) == 1
+    prompt = stub.calls[0]["prompt"]
+    context = INFLUENCER_STORE["aurora_rise"]
+    assert context["story"] in prompt
+    assert context["personality"] in prompt
 
 
 def test_generate_video_missing_entries_returns_error():
@@ -490,7 +549,11 @@ def test_generate_video_missing_entries_returns_error():
     try:
         response = client.post(
             "/api/generate/video",
-            json={"model": "demo/video", "prompt": "Missing entries"},
+            json={
+                "model": "demo/video",
+                "prompt": "Missing entries",
+                **DEFAULT_CONTEXT,
+            },
         )
     finally:
         reset_overrides()
@@ -506,7 +569,11 @@ def test_generate_video_with_non_dict_blob_returns_error():
     try:
         response = client.post(
             "/api/generate/video",
-            json={"model": "demo/video", "prompt": "Invalid entry"},
+            json={
+                "model": "demo/video",
+                "prompt": "Invalid entry",
+                **DEFAULT_CONTEXT,
+            },
         )
     finally:
         reset_overrides()
@@ -522,7 +589,11 @@ def test_generate_video_propagates_openrouter_errors():
     try:
         response = client.post(
             "/api/generate/video",
-            json={"model": "demo/video", "prompt": "Should fail"},
+            json={
+                "model": "demo/video",
+                "prompt": "Should fail",
+                **DEFAULT_CONTEXT,
+            },
         )
     finally:
         reset_overrides()
@@ -541,13 +612,18 @@ def test_generate_text_uses_stubbed_client_and_closes() -> None:
 
     response = client.post(
         "/api/generate/text",
-        json={"model": "meta/llama", "prompt": "Hello"},
+        json={"model": "meta/llama", "prompt": "Hello", **DEFAULT_CONTEXT},
     )
 
     try:
         assert response.status_code == 200
         assert response.json() == {"content": "expected text"}
-        assert stub.calls == [("meta/llama", "Hello")]
+        assert len(stub.calls) == 1
+        model, prompt = stub.calls[0]
+        assert model == "meta/llama"
+        assert "Hello" in prompt
+        assert DEFAULT_CONTEXT["story"] in prompt
+        assert DEFAULT_CONTEXT["personality"] in prompt
         assert stub.closed is True
     finally:
         _clear_overrides()
@@ -563,13 +639,42 @@ def test_generate_text_returns_502_on_openrouter_error() -> None:
 
     response = client.post(
         "/api/generate/text",
-        json={"model": "meta/llama", "prompt": "Hello"},
+        json={"model": "meta/llama", "prompt": "Hello", **DEFAULT_CONTEXT},
     )
 
     try:
         assert response.status_code == 502
         assert response.json() == {"detail": "stub failure"}
         assert stub.closed is True
+    finally:
+        _clear_overrides()
+
+
+def test_generate_text_enriches_prompt_with_store_context() -> None:
+    stub = StubTextClient(result="contextualized")
+
+    async def override_client() -> StubTextClient:
+        return stub
+
+    app.dependency_overrides[get_client] = override_client
+
+    response = client.post(
+        "/api/generate/text",
+        json={
+            "model": "meta/llama",
+            "prompt": "Racconta un messaggio motivazionale",
+            "influencer_id": "Aurora_Rise",
+        },
+    )
+
+    try:
+        assert response.status_code == 200
+        assert stub.closed is True
+        assert len(stub.calls) == 1
+        _, prompt = stub.calls[0]
+        context = INFLUENCER_STORE["aurora_rise"]
+        assert context["story"] in prompt
+        assert context["personality"] in prompt
     finally:
         _clear_overrides()
 

@@ -4,11 +4,11 @@ from __future__ import annotations
 import base64
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from ai_influencer.webapp.influencers import (
     InfluencerAlreadyExistsError,
@@ -21,13 +21,125 @@ from ai_influencer.webapp.openrouter import (
     summarize_models,
 )
 
+INFLUENCER_STORE: Dict[str, Dict[str, str]] = {
+    "aurora_rise": {
+        "story": (
+            "Aurora Rise ha iniziato come fotografa itinerante e ora racconta "
+            "viaggi spaziali immaginari con un focus su comunità inclusive."
+        ),
+        "personality": (
+            "Ottimista visionaria, parla con tono ispirazionale e calore umano, "
+            "invogliando il pubblico a immaginare futuri luminosi."
+        ),
+    },
+    "luca_wave": {
+        "story": (
+            "Luca Wave è un ex DJ diventato storyteller digitale che mescola "
+            "memorie costiere e tecnologia immersiva."
+        ),
+        "personality": (
+            "Rilassato ma curioso, usa un linguaggio poetico e vibrazioni da "
+            "tramonto mediterraneo per mettere a proprio agio chi lo segue."
+        ),
+    },
+}
+
+
 app = FastAPI(title="AI Influencer Control Hub")
 influencer_store = get_influencer_store()
 
 
 async def get_client() -> OpenRouterClient:
     return OpenRouterClient()
-class TextGenerationRequest(BaseModel):
+
+
+def _resolve_influencer_context(
+    payload: InfluencerContext,
+) -> Tuple[str, str]:
+    if payload.story and payload.personality:
+        return payload.story, payload.personality
+
+    if payload.influencer_id:
+        lookup_key = payload.influencer_id.lower()
+        record = INFLUENCER_STORE.get(lookup_key)
+        if not record:
+            raise HTTPException(status_code=404, detail="Influencer context not found")
+        return record["story"], record["personality"]
+
+    raise HTTPException(status_code=422, detail="Contesto influencer mancante")
+
+
+def _enrich_text_prompt(base_prompt: str, story: str, personality: str) -> str:
+    prompt = base_prompt.strip()
+    context = (
+        f"Storia dell'influencer: {story}\n"
+        f"Personalità e tono: {personality}"
+    )
+    return f"{prompt}\n\n{context}" if prompt else context
+
+
+def _enrich_visual_prompt(base_prompt: str, story: str, personality: str) -> str:
+    prompt = base_prompt.strip()
+    visual_context = (
+        f"Ispirazione narrativa dalla storia: {story}. "
+        f"Tonalità coerente con la personalità: {personality}."
+    )
+    if not prompt:
+        return visual_context
+    return (
+        f"{prompt}. {visual_context}" if not prompt.endswith(".") else f"{prompt} {visual_context}"
+    )
+
+
+def _enrich_video_prompt(base_prompt: str, story: str, personality: str) -> str:
+    prompt = base_prompt.strip()
+    video_context = (
+        f"Sequenza guidata dalla storia: {story}. "
+        f"Atmosfera e voce coerenti con la personalità: {personality}."
+    )
+    if not prompt:
+        return video_context
+    return (
+        f"{prompt}. {video_context}" if not prompt.endswith(".") else f"{prompt} {video_context}"
+    )
+
+
+class InfluencerContext(BaseModel):
+    influencer_id: Optional[str] = Field(
+        None,
+        description="Identificativo univoco dell'influencer registrato nello store",
+    )
+    story: Optional[str] = Field(
+        None,
+        description="Breve storia o background dell'influencer",
+    )
+    personality: Optional[str] = Field(
+        None,
+        description="Personalità e tono caratteristico dell'influencer",
+    )
+
+    @model_validator(mode="after")
+    def validate_context(self) -> "InfluencerContext":
+        has_id = bool(self.influencer_id and self.influencer_id.strip())
+        has_story = bool(self.story and self.story.strip())
+        has_personality = bool(self.personality and self.personality.strip())
+
+        if has_story != has_personality:
+            raise ValueError("story e personality devono essere fornite insieme")
+        if not has_id and not (has_story and has_personality):
+            raise ValueError(
+                "specificare influencer_id oppure fornire story e personality"
+            )
+
+        if has_id:
+            self.influencer_id = self.influencer_id.strip()
+        if has_story:
+            self.story = self.story.strip()
+            self.personality = self.personality.strip()
+        return self
+
+
+class TextGenerationRequest(InfluencerContext):
     model: str = Field(..., description="OpenRouter model identifier")
     prompt: str = Field(..., description="Prompt to send to the model")
 
@@ -37,7 +149,7 @@ class TokenUsageRequest(BaseModel):
     prompt: str = Field(..., description="Prompt to tokenize")
 
 
-class ImageGenerationRequest(BaseModel):
+class ImageGenerationRequest(InfluencerContext):
     model: str
     prompt: str
     negative_prompt: Optional[str] = Field(None, description="Negative prompt")
@@ -47,7 +159,7 @@ class ImageGenerationRequest(BaseModel):
     guidance: Optional[float] = Field(None, ge=0.0, le=50.0)
 
 
-class VideoGenerationRequest(BaseModel):
+class VideoGenerationRequest(InfluencerContext):
     model: str
     prompt: str
     duration: Optional[float] = Field(None, ge=1.0, le=60.0)
@@ -92,7 +204,11 @@ async def generate_text(
     client: OpenRouterClient = Depends(get_client),
 ) -> JSONResponse:
     try:
-        result = await client.generate_text(payload.model, payload.prompt)
+        story, personality = _resolve_influencer_context(payload)
+        enriched_prompt = _enrich_text_prompt(payload.prompt, story, personality)
+        result = await client.generate_text(payload.model, enriched_prompt)
+    except HTTPException:
+        raise
     except OpenRouterError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     finally:
@@ -120,15 +236,19 @@ async def generate_image(
     client: OpenRouterClient = Depends(get_client),
 ) -> JSONResponse:
     try:
+        story, personality = _resolve_influencer_context(payload)
+        enriched_prompt = _enrich_visual_prompt(payload.prompt, story, personality)
         data = await client.generate_image(
             model=payload.model,
-            prompt=payload.prompt,
+            prompt=enriched_prompt,
             negative_prompt=payload.negative_prompt,
             width=payload.width,
             height=payload.height,
             steps=payload.steps,
             guidance=payload.guidance,
         )
+    except HTTPException:
+        raise
     except OpenRouterError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     finally:
@@ -167,12 +287,16 @@ async def generate_video(
     client: OpenRouterClient = Depends(get_client),
 ) -> JSONResponse:
     try:
+        story, personality = _resolve_influencer_context(payload)
+        enriched_prompt = _enrich_video_prompt(payload.prompt, story, personality)
         data = await client.generate_video(
             model=payload.model,
-            prompt=payload.prompt,
+            prompt=enriched_prompt,
             duration=payload.duration,
             size=payload.size,
         )
+    except HTTPException:
+        raise
     except OpenRouterError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     finally:
