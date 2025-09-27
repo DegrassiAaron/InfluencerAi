@@ -367,6 +367,49 @@ def test_create_influencer_persists_story_and_personality() -> None:
         store.clear()
 
 
+def test_create_influencer_with_lora_and_contents_and_retrieve() -> None:
+    store = get_influencer_store()
+    store.clear()
+    try:
+        response = client.post(
+            "/api/influencers",
+            json={
+                "identifier": "@stellar_voice",
+                "story": "Interstellar traveler sharing cosmic tales.",
+                "personality": "Warm and inquisitive",
+                "lora_model": "  loras/stellar.safetensors  ",
+                "contents": [" Galaxy guide  ", "", "Deep space podcast"],
+            },
+        )
+
+        assert response.status_code == 201
+        created = response.json()
+        assert created["lora_model"] == "loras/stellar.safetensors"
+        assert created["contents"] == ["Galaxy guide", "Deep space podcast"]
+
+        lookup = client.get("/api/influencers/stellar_voice")
+        assert lookup.status_code == 200
+        payload = lookup.json()
+        assert payload["handle"] == "@stellar_voice"
+        assert payload["lora_model"] == "loras/stellar.safetensors"
+        assert payload["contents"] == ["Galaxy guide", "Deep space podcast"]
+        assert payload["story"] == "Interstellar traveler sharing cosmic tales."
+        assert payload["personality"] == "Warm and inquisitive"
+    finally:
+        store.clear()
+
+
+def test_get_influencer_returns_404_for_missing_record() -> None:
+    store = get_influencer_store()
+    store.clear()
+    try:
+        response = client.get("/api/influencers/nonexistent")
+        assert response.status_code == 404
+        assert response.json() == {"detail": "Influencer not found"}
+    finally:
+        store.clear()
+
+
 def test_influencer_lookup_returns_enriched_media():
     response = client.post(
         "/api/influencer",
