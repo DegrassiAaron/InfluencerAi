@@ -14,6 +14,8 @@ import pytest
 
 from ai_influencer.webapp.main import app, get_client
 from ai_influencer.webapp.openrouter import OpenRouterError, summarize_models
+from ai_influencer.webapp import storage
+from ai_influencer.webapp.storage import StorageError
 
 
 client = TestClient(app, raise_server_exceptions=False)
@@ -228,6 +230,26 @@ def test_get_openrouter_config_returns_masked_values(monkeypatch):
     assert payload["api_key_preview"].endswith("3456")
     assert set(payload["api_key_preview"].replace("3456", "")) == {"*"}
     assert payload["base_url"] == "https://api.openrouter.ai"
+
+
+def test_get_storage_error_returns_500(monkeypatch):
+    original_overrides = dict(app.dependency_overrides)
+    original_create_connection = storage.create_connection
+    monkeypatch.setattr(
+        storage,
+        "create_connection",
+        lambda: (_ for _ in ()).throw(StorageError("boom")),
+    )
+
+    try:
+        response = client.get("/api/data")
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+        setattr(storage, "create_connection", original_create_connection)
+
+    assert response.status_code == 500
+    assert "boom" in response.text
 
 
 def test_update_openrouter_config_updates_environment(monkeypatch):
