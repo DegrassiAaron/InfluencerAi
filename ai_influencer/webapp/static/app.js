@@ -8,6 +8,16 @@ const imageForm = document.querySelector('#image-form');
 const imageOutput = document.querySelector('#image-output');
 const videoForm = document.querySelector('#video-form');
 const videoOutput = document.querySelector('#video-output');
+const textModelSelect = document.querySelector('#text-model');
+const imageModelSelect = document.querySelector('#image-model');
+const videoModelSelect = document.querySelector('#video-model');
+const filterInputs = Array.from(document.querySelectorAll('input[data-filter-for]'));
+
+const SELECT_CONFIG = [
+  { select: textModelSelect, capability: 'text' },
+  { select: imageModelSelect, capability: 'image' },
+  { select: videoModelSelect, capability: 'video' },
+];
 
 let modelsCache = [];
 
@@ -106,10 +116,64 @@ async function fetchModels() {
     if (!response.ok) throw new Error('Impossibile recuperare i modelli');
     const payload = await response.json();
     modelsCache = payload.models || [];
+    populateModelSelects(modelsCache);
     renderModels(modelsCache);
   } catch (err) {
     modelsList.innerHTML = `<p class="error">${err.message}</p>`;
   }
+}
+
+function buildSelectOptions(models, capability) {
+  return models.slice().sort((a, b) => {
+    const aHas = (a.capabilities || []).includes(capability);
+    const bHas = (b.capabilities || []).includes(capability);
+    if (aHas === bHas) return 0;
+    return aHas ? -1 : 1;
+  });
+}
+
+function populateModelSelects(models) {
+  SELECT_CONFIG.forEach(({ select, capability }) => {
+    if (!select) return;
+    const previousValue = select.value;
+    const options = buildSelectOptions(models, capability);
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Seleziona un modello';
+    select.appendChild(placeholder);
+    options.forEach((model) => {
+      const option = document.createElement('option');
+      option.value = model.id;
+      option.textContent = model.name || model.id;
+      option.dataset.provider = model.provider || '';
+      option.dataset.capabilities = (model.capabilities || []).join(',');
+      select.appendChild(option);
+    });
+    if (previousValue && select.querySelector(`option[value="${previousValue.replace(/"/g, '\\"')}"]`)) {
+      select.value = previousValue;
+    } else {
+      select.value = '';
+    }
+  });
+}
+
+function filterSelectOptions(input) {
+  const targetId = input.dataset.filterFor;
+  if (!targetId) return;
+  const select = document.querySelector(`#${targetId}`);
+  if (!select) return;
+  const term = input.value.trim().toLowerCase();
+  Array.from(select.options).forEach((option) => {
+    if (!option.value) {
+      option.hidden = false;
+      return;
+    }
+    const text = `${option.textContent} ${option.value} ${option.dataset.provider || ''}`
+      .trim()
+      .toLowerCase();
+    option.hidden = term && !text.includes(term);
+  });
 }
 
 function renderModels(models) {
@@ -139,11 +203,7 @@ function renderModels(models) {
       }
       clone.querySelectorAll('button[data-target]').forEach((btn) => {
         btn.addEventListener('click', () => {
-          const target = document.querySelector(`#${btn.dataset.target}`);
-          if (target) {
-            target.value = model.id;
-            target.focus();
-          }
+          selectModelForTarget(btn.dataset.target, model);
         });
       });
       modelsList.appendChild(clone);
@@ -152,9 +212,44 @@ function renderModels(models) {
 
 filterSelect.addEventListener('change', () => renderModels(modelsCache));
 
+function ensureOption(select, model) {
+  if (!select) return null;
+  const existing = select.querySelector(`option[value="${model.id.replace(/"/g, '\\"')}"]`);
+  if (existing) {
+    existing.textContent = model.name || model.id;
+    return existing;
+  }
+  const option = document.createElement('option');
+  option.value = model.id;
+  option.textContent = model.name || model.id;
+  option.dataset.provider = model.provider || '';
+  option.dataset.capabilities = (model.capabilities || []).join(',');
+  select.appendChild(option);
+  return option;
+}
+
+function selectModelForTarget(targetId, model) {
+  if (!targetId) return;
+  const select = document.querySelector(`#${targetId}`);
+  if (!select) return;
+  const filterInput = document.querySelector(`input[data-filter-for="${targetId}"]`);
+  if (filterInput) {
+    filterInput.value = '';
+    filterSelectOptions(filterInput);
+  }
+  ensureOption(select, model);
+  select.value = model.id;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  select.focus();
+}
+
+filterInputs.forEach((input) => {
+  input.addEventListener('input', () => filterSelectOptions(input));
+});
+
 async function handleTextSubmit(event) {
   event.preventDefault();
-  const model = document.querySelector('#text-model').value.trim();
+  const model = textModelSelect.value.trim();
   const prompt = document.querySelector('#text-prompt').value.trim();
   if (!model || !prompt) return;
   textOutput.textContent = 'Generazione in corso...';
@@ -174,7 +269,7 @@ async function handleTextSubmit(event) {
 
 async function handleImageSubmit(event) {
   event.preventDefault();
-  const model = document.querySelector('#image-model').value.trim();
+  const model = imageModelSelect.value.trim();
   const prompt = document.querySelector('#image-prompt').value.trim();
   const negative = document.querySelector('#image-negative').value.trim();
   const width = Number(document.querySelector('#image-width').value);
@@ -201,7 +296,7 @@ async function handleImageSubmit(event) {
 
 async function handleVideoSubmit(event) {
   event.preventDefault();
-  const model = document.querySelector('#video-model').value.trim();
+  const model = videoModelSelect.value.trim();
   const prompt = document.querySelector('#video-prompt').value.trim();
   const duration = document.querySelector('#video-duration').value;
   const size = document.querySelector('#video-size').value.trim();
