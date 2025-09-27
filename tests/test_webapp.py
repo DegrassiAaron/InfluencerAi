@@ -2,7 +2,6 @@
 
 import base64
 import os
-import pathlib
 import sys
 from pathlib import Path
 from typing import Optional
@@ -21,32 +20,26 @@ from ai_influencer.webapp.storage import StorageError
 client = TestClient(app, raise_server_exceptions=False)
 
 
-def test_homepage_renders_index_template():
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert 'href="/" aria-current="page"' in response.text
-
-
-def test_influencer_page_renders_influencer_template():
-    response = client.get("/influencer")
-
-    assert response.status_code == 200
-    assert 'href="/influencer" aria-current="page"' in response.text
-
-
-def test_settings_page_renders_settings_template():
-    response = client.get("/settings")
-
-    assert response.status_code == 200
-    assert 'href="/settings" aria-current="page"' in response.text
-
-
 def test_healthcheck_returns_ok_payload():
     response = client.get("/healthz")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_docs_endpoint_is_available():
+    response = client.get("/docs")
+
+    assert response.status_code == 200
+    assert "Swagger UI" in response.text
+
+
+def test_openapi_schema_is_available():
+    response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    schema = response.json()
+    assert schema["info"]["title"] == "AI Influencer Control Hub"
 
 
 @pytest.fixture()
@@ -485,15 +478,6 @@ def test_data_api_validates_payload(temp_data_db):
     response = client.post("/api/data", json={"name": "", "value": ""})
 
     assert response.status_code == 422
-
-
-def test_data_html_route_renders(temp_data_db):
-    response = client.get("/dati")
-
-    assert response.status_code == 200
-    body = response.text
-    assert "<table id=\"data-table\"" in body
-    assert "data.js" in body
 
 
 class StubVideoClient:
