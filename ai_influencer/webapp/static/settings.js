@@ -28,60 +28,172 @@ function showToast(message, state = 'info') {
   }, 2000);
 }
 
-const statusEl = document.querySelector('#config-status');
-const form = document.querySelector('#openrouter-form');
-const apiKeyInput = document.querySelector('#openrouter-api-key');
-const baseUrlInput = document.querySelector('#openrouter-base-url');
-const clearButton = document.querySelector('#clear-settings');
+const tableBody = document.querySelector('#services-table-body');
+const dialog = document.querySelector('#service-dialog');
+const form = document.querySelector('#service-form');
+const titleEl = document.querySelector('#service-dialog-title');
+const envHintEl = document.querySelector('#service-env-hint');
+const serviceIdInput = document.querySelector('#service-id');
+const apiKeyInput = document.querySelector('#service-api-key');
+const endpointInput = document.querySelector('#service-endpoint');
+const cancelButton = document.querySelector('#service-cancel');
 
-function renderStatus(payload) {
-  if (!statusEl) return;
-  statusEl.className = 'status-message';
-  const lines = [];
-  if (payload.has_api_key) {
-    const preview = payload.api_key_preview || '••••';
-    lines.push(`Chiave configurata: ${preview}`);
-  } else {
-    lines.push('Nessuna chiave configurata.');
-    statusEl.classList.add('empty');
-  }
-  if (payload.base_url) {
-    lines.push(`Endpoint personalizzato: ${payload.base_url}`);
-  }
-  statusEl.textContent = lines.join('\n');
+let servicesCache = [];
+let activeService = null;
+
+function renderEmptyState(message) {
+  if (!tableBody) return;
+  tableBody.innerHTML = '';
+  const row = document.createElement('tr');
+  row.className = 'empty';
+  const cell = document.createElement('td');
+  cell.colSpan = 4;
+  cell.textContent = message;
+  row.appendChild(cell);
+  tableBody.appendChild(row);
 }
 
-async function loadConfig() {
-  if (!statusEl) return;
-  statusEl.textContent = 'Caricamento configurazione...';
-  statusEl.className = 'status-message loading';
+function renderServicesTable(services) {
+  if (!tableBody) return;
+  tableBody.innerHTML = '';
+  if (!services.length) {
+    renderEmptyState('Nessun servizio configurabile.');
+    return;
+  }
+
+  services.forEach((service) => {
+    const row = document.createElement('tr');
+
+    const serviceCell = document.createElement('td');
+    serviceCell.textContent = service.name;
+    row.appendChild(serviceCell);
+
+    const endpointCell = document.createElement('td');
+    if (service.endpoint) {
+      endpointCell.textContent = service.endpoint;
+      if (service.uses_default_endpoint && service.default_endpoint) {
+        const badge = document.createElement('span');
+        badge.className = 'table-hint';
+        badge.textContent = 'predefinito';
+        endpointCell.append(' ', badge);
+      }
+    } else {
+      endpointCell.textContent = '—';
+    }
+    row.appendChild(endpointCell);
+
+    const keyCell = document.createElement('td');
+    if (service.has_api_key) {
+      keyCell.textContent = service.api_key_preview ?? '••••';
+      keyCell.title = 'Chiave configurata';
+    } else {
+      keyCell.textContent = '—';
+      keyCell.title = 'Nessuna chiave configurata';
+    }
+    row.appendChild(keyCell);
+
+    const actionsCell = document.createElement('td');
+    actionsCell.className = 'actions';
+    const editButton = document.createElement('button');
+    editButton.type = 'button';
+    editButton.className = 'button-secondary';
+    editButton.textContent = 'Modifica';
+    editButton.addEventListener('click', () => openServiceDialog(service.id));
+    actionsCell.appendChild(editButton);
+    row.appendChild(actionsCell);
+
+    tableBody.appendChild(row);
+  });
+}
+
+async function loadServices() {
+  if (!tableBody) return;
+  renderEmptyState('Caricamento servizi...');
   try {
-    const response = await fetch('/api/config/openrouter');
+    const response = await fetch('/api/config/services');
     if (!response.ok) {
-      throw new Error('Impossibile recuperare la configurazione');
+      throw new Error('Impossibile recuperare i servizi');
     }
     const payload = await response.json();
-    renderStatus(payload);
+    servicesCache = Array.isArray(payload.services) ? payload.services : [];
+    renderServicesTable(servicesCache);
   } catch (error) {
-    statusEl.className = 'status-message error';
-    statusEl.textContent = error.message;
+    renderEmptyState(error.message || 'Errore durante il caricamento.');
+    showToast(error.message || 'Errore durante il caricamento', 'error');
   }
 }
 
-async function handleSubmit(event) {
+function openServiceDialog(serviceId) {
+  const service = servicesCache.find((item) => item.id === serviceId);
+  if (!service || !dialog || !form) return;
+
+  activeService = service;
+  form.reset();
+  serviceIdInput.value = service.id;
+  titleEl.textContent = `Modifica ${service.name}`;
+
+  const envHints = [];
+  if (service.env?.api_key) {
+    envHints.push(`Chiave: ${service.env.api_key}`);
+  }
+  if (service.env?.endpoint) {
+    envHints.push(`Endpoint: ${service.env.endpoint}`);
+  }
+  envHintEl.textContent = envHints.length
+    ? `Variabili ambiente: ${envHints.join(' · ')}`
+    : '';
+
+  apiKeyInput.value = '';
+  apiKeyInput.placeholder = 'sk-...';
+  endpointInput.value = '';
+  endpointInput.placeholder = service.default_endpoint || '';
+  if (service.endpoint && !service.uses_default_endpoint) {
+    endpointInput.value = service.endpoint;
+  }
+
+  if (typeof dialog.showModal === 'function') {
+    dialog.showModal();
+  } else {
+    dialog.setAttribute('open', '');
+  }
+  apiKeyInput.focus();
+}
+
+function closeServiceDialog() {
+  if (!dialog || !form) return;
+  form.reset();
+  activeService = null;
+  if (typeof dialog.close === 'function') {
+    dialog.close();
+  } else {
+    dialog.removeAttribute('open');
+  }
+}
+
+async function submitService(event) {
   event.preventDefault();
-  if (!form) return;
-  const apiKey = apiKeyInput?.value.trim() ?? '';
-  const baseUrl = baseUrlInput?.value.trim() ?? '';
+  if (!form || !activeService) return;
+
   const payload = {};
-  if (apiKey) payload.api_key = apiKey;
-  if (baseUrl) payload.base_url = baseUrl;
-  if (!payload.api_key && !payload.base_url) {
+  const apiKeyValue = apiKeyInput.value.trim();
+  const endpointValue = endpointInput.value.trim();
+
+  if (apiKeyValue) {
+    payload.api_key = apiKeyValue;
+  }
+  if (endpointValue) {
+    payload.endpoint = endpointValue;
+  } else if (!endpointValue && activeService && !activeService.uses_default_endpoint) {
+    payload.endpoint = null;
+  }
+
+  if (Object.keys(payload).length === 0) {
     showToast('Inserisci almeno un valore da salvare', 'error');
     return;
   }
+
   try {
-    const response = await fetch('/api/config/openrouter', {
+    const response = await fetch(`/api/config/services/${activeService.id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -90,26 +202,16 @@ async function handleSubmit(event) {
     if (!response.ok) {
       throw new Error(data.detail || 'Salvataggio non riuscito');
     }
-    renderStatus(data);
+
     showToast('Configurazione aggiornata', 'success');
-    form.reset();
-    apiKeyInput?.focus();
+    closeServiceDialog();
+    await loadServices();
   } catch (error) {
     showToast(error.message, 'error');
-    if (statusEl) {
-      statusEl.className = 'status-message error';
-      statusEl.textContent = error.message;
-    }
   }
 }
 
-function handleClear() {
-  form?.reset();
-  apiKeyInput?.focus();
-  showToast('Modulo pulito', 'success');
-}
+form?.addEventListener('submit', submitService);
+cancelButton?.addEventListener('click', closeServiceDialog);
 
-form?.addEventListener('submit', handleSubmit);
-clearButton?.addEventListener('click', handleClear);
-
-loadConfig();
+loadServices();

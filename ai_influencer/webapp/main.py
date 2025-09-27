@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import os
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -97,29 +98,97 @@ def _mask_secret(secret: Optional[str]) -> Optional[str]:
     return "*" * (len(secret) - 4) + secret[-4:]
 
 
-class OpenRouterConfigRequest(BaseModel):
+@dataclass(frozen=True)
+class ServiceMetadata:
+    """Static metadata describing a configurable external service."""
+
+    id: str
+    display_name: str
+    default_endpoint: Optional[str]
+    api_key_env: Optional[str]
+    endpoint_env: Optional[str]
+
+
+SERVICE_REGISTRY: Dict[str, ServiceMetadata] = {
+    "openrouter": ServiceMetadata(
+        id="openrouter",
+        display_name="OpenRouter",
+        default_endpoint="https://openrouter.ai/api/v1",
+        api_key_env="OPENROUTER_API_KEY",
+        endpoint_env="OPENROUTER_BASE_URL",
+    ),
+}
+
+
+class ServiceUpdateRequest(BaseModel):
+    """Payload used to update the configuration of an external service."""
+
     api_key: Optional[str] = Field(
-        default=None, description="OpenRouter API key", min_length=1
+        default=None, description="Service API key", min_length=1
     )
-    base_url: Optional[AnyHttpUrl] = Field(
-        default=None, description="Optional OpenRouter base URL"
+    endpoint: Optional[AnyHttpUrl] = Field(
+        default=None, description="Override service endpoint"
     )
 
-    @field_validator("api_key")
+    @field_validator("api_key", mode="before")
     @classmethod
-    def _strip_api_key(cls, value: Optional[str]) -> Optional[str]:
+    def _normalize_api_key(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
-            return value
-        stripped = value.strip()
-        if not stripped:
+            return None
+        if isinstance(value, str):
+            value = value.strip()
+        if not value:
             raise ValueError("API key must not be empty")
-        return stripped
+        return value
+
+    @field_validator("endpoint", mode="before")
+    @classmethod
+    def _normalize_endpoint(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return None
+            return value
+        return value
 
     @model_validator(mode="after")
-    def _ensure_payload(self) -> "OpenRouterConfigRequest":
-        if self.api_key is None and self.base_url is None:
+    def _ensure_payload(self) -> "ServiceUpdateRequest":
+        api_key_provided = "api_key" in self.model_fields_set
+        endpoint_provided = "endpoint" in self.model_fields_set
+
+        if not api_key_provided and not endpoint_provided:
             raise ValueError("Provide at least one value to update")
+        if api_key_provided and self.api_key is None:
+            raise ValueError("API key must not be empty")
         return self
+
+
+def _serialize_service(metadata: ServiceMetadata) -> Dict[str, Any]:
+    api_key_value = (
+        os.environ.get(metadata.api_key_env) if metadata.api_key_env else None
+    )
+    endpoint_override = (
+        os.environ.get(metadata.endpoint_env) if metadata.endpoint_env else None
+    )
+    resolved_endpoint = endpoint_override or metadata.default_endpoint
+    env_keys: Dict[str, str] = {}
+    if metadata.api_key_env:
+        env_keys["api_key"] = metadata.api_key_env
+    if metadata.endpoint_env:
+        env_keys["endpoint"] = metadata.endpoint_env
+
+    return {
+        "id": metadata.id,
+        "name": metadata.display_name,
+        "endpoint": resolved_endpoint,
+        "default_endpoint": metadata.default_endpoint,
+        "uses_default_endpoint": endpoint_override is None,
+        "env": env_keys,
+        "has_api_key": bool(api_key_value),
+        "api_key_preview": _mask_secret(api_key_value),
+    }
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -165,30 +234,46 @@ async def list_models(client: OpenRouterClient = Depends(get_client)) -> JSONRes
     return JSONResponse({"models": summarize_models(models)})
 
 
-@app.get("/api/config/openrouter")
-async def get_openrouter_config() -> Dict[str, Any]:
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    base_url = os.environ.get("OPENROUTER_BASE_URL")
-    return {
-        "has_api_key": bool(api_key),
-        "api_key_preview": _mask_secret(api_key),
-        "base_url": base_url or None,
-    }
+@app.get("/api/config/services")
+async def list_configurable_services() -> Dict[str, Any]:
+    services = [_serialize_service(metadata) for metadata in SERVICE_REGISTRY.values()]
+    return {"services": services}
 
 
-@app.post("/api/config/openrouter")
-async def update_openrouter_config(payload: OpenRouterConfigRequest) -> Dict[str, Any]:
+@app.post("/api/config/services/{service_id}")
+async def update_service_configuration(
+    service_id: str, payload: ServiceUpdateRequest
+) -> Dict[str, Any]:
+    metadata = SERVICE_REGISTRY.get(service_id)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail="Service not found")
+
     updated: Dict[str, Any] = {}
     if payload.api_key is not None:
-        os.environ["OPENROUTER_API_KEY"] = payload.api_key
+        if metadata.api_key_env is None:
+            raise HTTPException(
+                status_code=400, detail="Service does not accept API keys"
+            )
+        os.environ[metadata.api_key_env] = payload.api_key
         updated["api_key"] = True
-    if payload.base_url is not None:
-        os.environ["OPENROUTER_BASE_URL"] = str(payload.base_url)
-        updated["base_url"] = str(payload.base_url)
 
-    refreshed = await get_openrouter_config()
-    refreshed["updated"] = updated
-    return refreshed
+    endpoint_provided = "endpoint" in payload.model_fields_set
+    if endpoint_provided:
+        if metadata.endpoint_env is None:
+            raise HTTPException(
+                status_code=400, detail="Service does not accept endpoint overrides"
+            )
+        if payload.endpoint is None:
+            os.environ.pop(metadata.endpoint_env, None)
+            updated["endpoint"] = None
+        else:
+            os.environ[metadata.endpoint_env] = str(payload.endpoint)
+            updated["endpoint"] = str(payload.endpoint)
+
+    return {
+        "service": _serialize_service(metadata),
+        "updated": updated,
+    }
 
 
 @app.get("/api/data")
