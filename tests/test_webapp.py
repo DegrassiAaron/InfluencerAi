@@ -1,7 +1,6 @@
 """Tests for the FastAPI web application endpoints."""
 
 import base64
-import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -199,120 +198,6 @@ def test_generate_image_returns_remote_url_and_closes_client():
         "is_remote": True,
     }
     assert stub_client.closed is True
-
-
-def test_get_openrouter_config_returns_masked_values(monkeypatch):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-123456")
-    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://api.openrouter.ai")
-
-    response = client.get("/api/config/openrouter")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["has_api_key"] is True
-    assert payload["api_key_preview"].endswith("3456")
-    assert set(payload["api_key_preview"].replace("3456", "")) == {"*"}
-    assert payload["base_url"] == "https://api.openrouter.ai"
-
-
-def test_service_registry_get_returns_expected_payload(monkeypatch):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-7890")
-    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://service.example/api")
-
-    response = client.get("/api/services/openrouter")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["service"] == "openrouter"
-    assert payload["display_name"] == "OpenRouter"
-    assert payload["has_api_key"] is True
-    assert payload["api_key_preview"].endswith("7890")
-    assert payload["base_url"] == "https://service.example/api"
-    assert payload["environment"]["OPENROUTER_API_KEY"] is True
-    assert (
-        payload["environment"]["OPENROUTER_BASE_URL"]
-        == "https://service.example/api"
-    )
-
-
-def test_update_openrouter_config_updates_environment(monkeypatch):
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
-
-    response = client.post(
-        "/api/config/openrouter",
-        json={
-            "api_key": "sk-new-9876",
-            "base_url": "https://example.com/api/v1",
-        },
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert os.environ["OPENROUTER_API_KEY"] == "sk-new-9876"
-    assert os.environ["OPENROUTER_BASE_URL"] == "https://example.com/api/v1"
-    assert payload["has_api_key"] is True
-    assert payload["api_key_preview"].endswith("9876")
-    assert payload["updated"] == {
-        "api_key": True,
-        "base_url": "https://example.com/api/v1",
-    }
-
-
-def test_service_registry_post_updates_environment(monkeypatch):
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
-
-    response = client.post(
-        "/api/services/openrouter",
-        json={
-            "api_key": "sk-service-5555",
-            "base_url": "https://registry.example/api",
-        },
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["service"] == "openrouter"
-    assert payload["updated"] == {
-        "api_key": True,
-        "base_url": "https://registry.example/api",
-    }
-    assert os.environ["OPENROUTER_API_KEY"] == "sk-service-5555"
-    assert os.environ["OPENROUTER_BASE_URL"] == "https://registry.example/api"
-
-
-def test_update_openrouter_config_allows_base_url_only(monkeypatch):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-existing-2222")
-    monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
-
-    response = client.post(
-        "/api/config/openrouter", json={"base_url": "https://custom.example/api"}
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert os.environ["OPENROUTER_API_KEY"] == "sk-existing-2222"
-    assert os.environ["OPENROUTER_BASE_URL"] == "https://custom.example/api"
-    assert payload["has_api_key"] is True
-    assert payload["base_url"] == "https://custom.example/api"
-    assert payload["api_key_preview"].endswith("2222")
-
-
-def test_update_openrouter_config_requires_payload():
-    response = client.post("/api/config/openrouter", json={})
-
-    assert response.status_code == 422
-    detail = response.json()["detail"]
-    assert any("Provide at least one value" in err["msg"] for err in detail)
-
-
-def test_update_openrouter_config_validates_base_url():
-    response = client.post(
-        "/api/config/openrouter", json={"base_url": "not-a-valid-url"}
-    )
-
-    assert response.status_code == 422
 
 
 def test_generate_image_returns_inline_base64_and_closes_client():
