@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "InfluencerAI Dataset Manifest Schema",
+  "type": "object",
+  "required": [
+    "project",
+    "version",
+    "items"
+  ],
+  "properties": {
+    "project": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "file",
+          "labels",
+          "split"
+        ],
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "source_master": {
+            "type": "string"
+          },
+          "labels": {
+            "$ref": "#/definitions/labels"
+          },
+          "split": {
+            "type": "string",
+            "enum": [
+              "train",
+              "val",
+              "test"
+            ]
+          },
+          "qc": {
+            "type": "object",
+            "properties": {
+              "face_sim": {
+                "type": [
+                  "number",
+                  "string"
+                ],
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "phash": {
+                "type": "string"
+              },
+              "nsfw": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "definitions": {
+    "labels": {
+      "type": "object",
+      "required": [
+        "pose",
+        "light",
+        "crop",
+        "context",
+        "outfit",
+        "expression"
+      ],
+      "properties": {
+        "pose": {
+          "type": "string"
+        },
+        "light": {
+          "type": "string"
+        },
+        "crop": {
+          "type": "string"
+        },
+        "context": {
+          "type": "string"
+        },
+        "outfit": {
+          "type": "string"
+        },
+        "expression": {
+          "type": "string"
+        },
+        "lens": {
+          "type": "string"
+        },
+        "angle": {
+          "type": "string"
+        },
+        "season": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

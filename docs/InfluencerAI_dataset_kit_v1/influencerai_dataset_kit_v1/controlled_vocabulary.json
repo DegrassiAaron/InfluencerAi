@@ -1,0 +1,61 @@
+{
+  "pose": [
+    "frontal_close",
+    "frontal_halfbody",
+    "frontal_full",
+    "three_quarter_close",
+    "three_quarter_half",
+    "profile_full"
+  ],
+  "light": [
+    "window_morning",
+    "window_afternoon",
+    "goldenhour",
+    "backlight_soft",
+    "softbox_indoor",
+    "night_urban"
+  ],
+  "crop": [
+    "close",
+    "half",
+    "full"
+  ],
+  "context": [
+    "studio_minimal",
+    "home_minimal",
+    "cafe_minimal",
+    "urban_street",
+    "park_green"
+  ],
+  "outfit": [
+    "white_blouse",
+    "black_turtleneck",
+    "casual_denim",
+    "sporty_set",
+    "summer_dress",
+    "coat_autumn"
+  ],
+  "expression": [
+    "neutral",
+    "soft_smile",
+    "serious"
+  ],
+  "lens": [
+    "35mm",
+    "50mm",
+    "85mm"
+  ],
+  "angle": [
+    "eye_level",
+    "eye_level_3by4",
+    "slight_high",
+    "slight_low"
+  ],
+  "season": [
+    "neutral",
+    "summer_warm",
+    "winter_cool",
+    "autumn_muted",
+    "spring_fresh"
+  ]
+}

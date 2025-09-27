@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "InfluencerAI Sidecar Schema",
+  "type": "object",
+  "required": [
+    "source_master",
+    "changed_dim",
+    "labels"
+  ],
+  "properties": {
+    "source_master": {
+      "type": "string",
+      "description": "Filename of the originating master image"
+    },
+    "changed_dim": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "pose",
+          "light",
+          "crop",
+          "context",
+          "outfit",
+          "expression"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "labels": {
+      "type": "object",
+      "required": [
+        "pose",
+        "light",
+        "crop",
+        "context",
+        "outfit",
+        "expression"
+      ],
+      "properties": {
+        "pose": {
+          "type": "string"
+        },
+        "light": {
+          "type": "string"
+        },
+        "crop": {
+          "type": "string"
+        },
+        "context": {
+          "type": "string"
+        },
+        "outfit": {
+          "type": "string"
+        },
+        "expression": {
+          "type": "string"
+        },
+        "lens": {
+          "type": "string"
+        },
+        "angle": {
+          "type": "string"
+        },
+        "season": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ui_notes": {
+      "type": "string"
+    },
+    "qc": {
+      "type": "object",
+      "properties": {
+        "face_sim": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "phash": {
+          "type": "string"
+        },
+        "nsfw": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

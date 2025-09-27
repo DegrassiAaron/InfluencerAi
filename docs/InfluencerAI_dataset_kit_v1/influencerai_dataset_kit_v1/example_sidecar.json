@@ -1,0 +1,23 @@
+{
+  "source_master": "2025-09-27_master_004.png",
+  "changed_dim": [
+    "light"
+  ],
+  "labels": {
+    "pose": "frontal_halfbody",
+    "light": "goldenhour",
+    "crop": "half",
+    "context": "cafe_minimal",
+    "outfit": "white_blouse",
+    "expression": "neutral",
+    "lens": "50mm",
+    "angle": "eye_level_3by4",
+    "season": "summer_warm"
+  },
+  "ui_notes": "variazione luce; mantenere stesso look-base",
+  "qc": {
+    "face_sim": 0.92,
+    "phash": "a1b2c3d4e5",
+    "nsfw": false
+  }
+}
