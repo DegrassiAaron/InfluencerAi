@@ -1,3 +1,4 @@
+
 # Control Hub API – Dettaglio funzionalità
 
 Questa panoramica descrive nel dettaglio gli endpoint esposti da `ai_influencer/webapp/main.py`, includendo campi obbligatori, opzionali e struttura delle risposte.
