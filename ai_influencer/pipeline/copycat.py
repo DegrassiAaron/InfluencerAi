@@ -755,18 +755,24 @@ def evolution_tracker(documents: List[Document]) -> EvolutionResult:
 
     jsd = _jensen_shannon(past_probs, recent_probs) if past_probs and recent_probs else 0.0
     style_delta = _mean_abs_z(past.style_metrics, recent.style_metrics)
-    score = max(0.0, min((jsd * 0.5) + (style_delta * 0.5), 1.0))
+    change_points: List[str] = []
+    for topic, weight in recent_probs.items():
+        if weight >= 0.12 and past_probs.get(topic, 0.0) < 0.05:
+            change_points.append(topic)
+
+    topic_weight = 0.5 + (0.2 if change_points else 0.0)
+    style_weight = max(0.0, 1.0 - topic_weight)
+    bonus = min(0.1 * len(change_points), 0.2)
+
+    base_score = (jsd * topic_weight) + (style_delta * style_weight)
+    score = max(0.0, min(base_score + bonus, 1.0))
+
     if score >= 0.65:
         flag = "high"
     elif score >= 0.35:
         flag = "moderate"
     else:
         flag = "low"
-
-    change_points = []
-    for topic, weight in recent_probs.items():
-        if weight >= 0.12 and past_probs.get(topic, 0.0) < 0.05:
-            change_points.append(topic)
 
     return EvolutionResult(round(score, 2), flag, change_points)
 
