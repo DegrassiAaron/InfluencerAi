@@ -186,6 +186,12 @@ class InfluencerCreateRequest(BaseModel):
     personality: str = Field(
         ..., description="Personality traits for the influencer", min_length=1
     )
+    lora_model: Optional[str] = Field(
+        None, description="Optional LoRA identifier or path associated with the influencer"
+    )
+    contents: Optional[List[str]] = Field(
+        None, description="Optional list of initial content descriptors"
+    )
 
 
 @app.get("/api/models")
@@ -323,6 +329,8 @@ async def create_influencer(payload: InfluencerCreateRequest) -> JSONResponse:
 
     story = payload.story.strip()
     personality = payload.personality.strip()
+    lora_model = payload.lora_model.strip() if payload.lora_model else None
+    contents = payload.contents or None
     if not story or not personality:
         raise HTTPException(
             status_code=422, detail="Story and personality are required"
@@ -333,6 +341,8 @@ async def create_influencer(payload: InfluencerCreateRequest) -> JSONResponse:
             identifier=identifier,
             story=story,
             personality=personality,
+            lora_model=lora_model,
+            contents=contents,
         )
     except InfluencerAlreadyExistsError as exc:
         raise HTTPException(status_code=409, detail="Influencer already exists") from exc
@@ -349,12 +359,15 @@ async def create_influencer(payload: InfluencerCreateRequest) -> JSONResponse:
             "story": record.story,
             "personality": record.personality,
             "created_at": record.created_at.isoformat(),
+            "lora_model": record.lora_model,
+            "contents": record.contents,
         },
     )
 
 
 @app.get("/api/influencers/{identifier}")
 async def get_influencer(identifier: str) -> JSONResponse:
+
     normalized = identifier.strip()
     if not normalized:
         raise HTTPException(status_code=422, detail="Identifier is required")
@@ -377,6 +390,23 @@ async def get_influencer(identifier: str) -> JSONResponse:
         payload["contents"] = stored.contents
 
     return JSONResponse(payload)
+
+    record = influencer_store.get(identifier)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Influencer not found")
+
+    return JSONResponse(
+        {
+            "handle": record.handle,
+            "identifier": record.identifier,
+            "story": record.story,
+            "personality": record.personality,
+            "created_at": record.created_at.isoformat(),
+            "lora_model": record.lora_model,
+            "contents": record.contents,
+        }
+    )
+
 
 
 @app.post("/api/influencer")
