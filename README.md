@@ -7,6 +7,7 @@
 - [Architettura del repository](#architettura-del-repository)
 - [Prerequisiti](#prerequisiti)
 - [Setup rapido](#setup-rapido)
+- [Variabili d'ambiente chiave](#variabili-dambiente-chiave)
 - [Esecuzione della pipeline](#esecuzione-della-pipeline)
   - [1. Preparazione del dataset](#1-preparazione-del-dataset)
   - [2. Storyboard e copy con OpenRouter](#2-storyboard-e-copy-con-openrouter)
@@ -18,8 +19,23 @@
 - [Control Hub web](#control-hub-web)
 - [Struttura delle cartelle dati](#struttura-delle-cartelle-dati)
 - [Interfacce alternative](#interfacce-alternative)
+- [Troubleshooting rapido](#troubleshooting-rapido)
 - [Test e sviluppo](#test-e-sviluppo)
 - [Documentazione aggiuntiva e licenza](#documentazione-aggiuntiva-e-licenza)
+
+## Variabili d'ambiente chiave
+Configura queste variabili prima di avviare gli script o i container. Possono essere esportate nel terminale locale, inserite in un file `.env` caricato da Docker Compose oppure definite direttamente nei servizi (`docker compose ... --env-file`).
+
+| Variabile | Obbligatoria | Descrizione | Utilizzata da |
+| --------- | ------------ | ----------- | ------------- |
+| `OPENROUTER_API_KEY` | ✅ | Chiave privata per autenticare tutte le chiamate verso OpenRouter. | Script CLI, webapp FastAPI |
+| `OPENROUTER_BASE_URL` | ➖ | Endpoint personalizzato (ad es. proxy self-hosted); di default `https://openrouter.ai/api/v1`. | Script CLI, webapp |
+| `OPENROUTER_APP_TITLE` | ➖ | Nome dell'applicazione riportato negli header verso OpenRouter, utile per il billing dashboard. | Webapp |
+| `OPENROUTER_APP_URL` | ➖ | URL pubblico del progetto da mostrare nel billing dashboard di OpenRouter. | Webapp |
+| `BASE_MODEL` | ➖ | Percorso del checkpoint SDXL da utilizzare di default nel training LoRA. | Script `train_lora.sh`, workflow n8n |
+| `HF_TOKEN` | ➖ | Token Hugging Face per scaricare modelli privati o ad accesso limitato. | Script `bootstrap_models.py`, CLI |
+
+> Suggerimento: crea un file `ai_influencer/docker/.env` copiando `ai_influencer/docker/.env.example` e aggiorna i valori sensibili una sola volta.
 
 ## Panoramica
 Il progetto **Influencer AI** fornisce un flusso end-to-end per costruire una persona virtuale partendo da un piccolo set di immagini reali, espandere il dataset con generazioni guidate da prompt, verificarne la qualità e addestrare un LoRA fotorealistico su Stable Diffusion XL. Il repository include:
@@ -245,6 +261,12 @@ ai_influencer/
 - **GUI desktop** (`scripts/gui_app.py`): fornisce una finestra Tkinter con wizard per API key, preparazione dataset, generazione testo/immagini, QC e augment. Ogni pulsante invoca gli script CLI corrispondenti mostrando i log in tempo reale.
 - **Workflow n8n** (`n8n/flow.json`): definisce un webhook che esegue sequenzialmente `prepare_dataset.py`, `openrouter_batch.py` e step collegati all'interno del container Docker; il nodo finale "Train LoRA" accetta un campo JSON `base_model` per scegliere il checkpoint da passare allo script.
 - **Script PowerShell** (`scripts/start_machine.ps1`, `scripts/stop_machine.ps1`): facilitano l'avvio/arresto dei container su Windows.
+
+## Troubleshooting rapido
+- **GPU non rilevata dai container** – verifica che `nvidia-smi` funzioni sull'host e riavvia Docker Desktop; assicurati che `docker compose` sia lanciato con supporto GPU (`--profile gpu` non è necessario perché il compose file utilizza l'estensione NVIDIA automaticamente).
+- **Errori 401/403 dalle API OpenRouter** – controlla che `OPENROUTER_API_KEY` sia presente nel container `ai_influencer_tools`/`webapp` (`docker compose exec <service> printenv | grep OPENROUTER`). Rigenera la chiave dal dashboard se è stata ruotata.
+- **Download modelli SDXL bloccato** – esporta `HF_TOKEN` con permessi di lettura per il repo richiesto oppure scarica manualmente il file `.safetensors` e copialo in `ai_influencer/models/base/`.
+- **Timeout nelle chiamate alle API** – imposta `OPENROUTER_BASE_URL` su un mirror locale o riduci il parametro `--sleep` negli script batch per diluire le richieste.
 
 ## Test e sviluppo
 - Installa le dipendenze di sviluppo:
