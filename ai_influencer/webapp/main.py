@@ -367,6 +367,30 @@ async def create_influencer(payload: InfluencerCreateRequest) -> JSONResponse:
 
 @app.get("/api/influencers/{identifier}")
 async def get_influencer(identifier: str) -> JSONResponse:
+
+    normalized = identifier.strip()
+    if not normalized:
+        raise HTTPException(status_code=422, detail="Identifier is required")
+
+    stored = influencer_store.get(normalized)
+    if not stored:
+        raise HTTPException(status_code=404, detail="Influencer non trovato")
+
+    payload: Dict[str, Any] = {
+        "handle": stored.handle,
+        "identifier": stored.identifier,
+        "story": stored.story,
+        "personality": stored.personality,
+        "created_at": stored.created_at.isoformat(),
+    }
+
+    if stored.lora_model is not None:
+        payload["lora_model"] = stored.lora_model
+    if stored.contents is not None:
+        payload["contents"] = stored.contents
+
+    return JSONResponse(payload)
+
     record = influencer_store.get(identifier)
     if record is None:
         raise HTTPException(status_code=404, detail="Influencer not found")
@@ -382,6 +406,7 @@ async def get_influencer(identifier: str) -> JSONResponse:
             "contents": record.contents,
         }
     )
+
 
 
 @app.post("/api/influencer")
@@ -483,6 +508,10 @@ async def influencer_lookup(payload: InfluencerLookupRequest) -> JSONResponse:
     if stored:
         payload_data["story"] = stored.story
         payload_data["personality"] = stored.personality
+        if stored.lora_model is not None:
+            payload_data["lora_model"] = stored.lora_model
+        if stored.contents is not None:
+            payload_data["contents"] = stored.contents
 
     return JSONResponse(payload_data)
 

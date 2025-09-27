@@ -4,7 +4,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Dict, List, Optional
+
+from typing import Any, Dict, List, Optional
+
 
 
 class InfluencerAlreadyExistsError(Exception):
@@ -21,7 +23,9 @@ class StoredInfluencer:
     personality: str
     created_at: datetime
     lora_model: Optional[str] = None
-    contents: Optional[List[str]] = field(default=None)
+
+    contents: Optional[List[Dict[str, Any]]] = None
+
 
 
 def extract_handle(identifier: str) -> str:
