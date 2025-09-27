@@ -48,7 +48,16 @@
           <h2>Generazione Testo</h2>
           <form id="text-form" class="form">
             <label>Modello
-              <input type="text" id="text-model" required placeholder="es. openrouter/auto" />
+              <div class="model-selector">
+                <input
+                  type="search"
+                  data-filter-for="text-model"
+                  placeholder="Filtra modelli testo"
+                />
+                <select id="text-model" data-capability="text" required>
+                  <option value="">Seleziona un modello</option>
+                </select>
+              </div>
             </label>
             <label>Prompt
               <textarea id="text-prompt" rows="4" required placeholder="Descrivi il contenuto da creare"></textarea>
@@ -62,7 +71,16 @@
           <h2>Generazione Immagine</h2>
           <form id="image-form" class="form">
             <label>Modello
-              <input type="text" id="image-model" required placeholder="es. stability-ai/stable-diffusion-xl-base-1.0" />
+              <div class="model-selector">
+                <input
+                  type="search"
+                  data-filter-for="image-model"
+                  placeholder="Filtra modelli immagine"
+                />
+                <select id="image-model" data-capability="image" required>
+                  <option value="">Seleziona un modello</option>
+                </select>
+              </div>
             </label>
             <label>Prompt
               <textarea id="image-prompt" rows="3" required placeholder="Descrivi l'immagine"></textarea>
@@ -87,7 +105,16 @@
           <h2>Generazione Video</h2>
           <form id="video-form" class="form">
             <label>Modello
-              <input type="text" id="video-model" required placeholder="es. openrouter/video-latest" />
+              <div class="model-selector">
+                <input
+                  type="search"
+                  data-filter-for="video-model"
+                  placeholder="Filtra modelli video"
+                />
+                <select id="video-model" data-capability="video" required>
+                  <option value="">Seleziona un modello</option>
+                </select>
+              </div>
             </label>
             <label>Prompt
               <textarea id="video-prompt" rows="3" required placeholder="Descrivi il video"></textarea>
