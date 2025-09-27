@@ -4,24 +4,142 @@ from __future__ import annotations
 import base64
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from ai_influencer.webapp.influencers import (
+    InfluencerAlreadyExistsError,
+    extract_handle,
+    get_influencer_store,
+)
 from ai_influencer.webapp.openrouter import (
     OpenRouterClient,
     OpenRouterError,
     summarize_models,
 )
 
+INFLUENCER_STORE: Dict[str, Dict[str, str]] = {
+    "aurora_rise": {
+        "story": (
+            "Aurora Rise ha iniziato come fotografa itinerante e ora racconta "
+            "viaggi spaziali immaginari con un focus su comunità inclusive."
+        ),
+        "personality": (
+            "Ottimista visionaria, parla con tono ispirazionale e calore umano, "
+            "invogliando il pubblico a immaginare futuri luminosi."
+        ),
+    },
+    "luca_wave": {
+        "story": (
+            "Luca Wave è un ex DJ diventato storyteller digitale che mescola "
+            "memorie costiere e tecnologia immersiva."
+        ),
+        "personality": (
+            "Rilassato ma curioso, usa un linguaggio poetico e vibrazioni da "
+            "tramonto mediterraneo per mettere a proprio agio chi lo segue."
+        ),
+    },
+}
+
+
 app = FastAPI(title="AI Influencer Control Hub")
+influencer_store = get_influencer_store()
 
 
 async def get_client() -> OpenRouterClient:
     return OpenRouterClient()
-class TextGenerationRequest(BaseModel):
+
+
+def _resolve_influencer_context(
+    payload: InfluencerContext,
+) -> Tuple[str, str]:
+    if payload.story and payload.personality:
+        return payload.story, payload.personality
+
+    if payload.influencer_id:
+        lookup_key = payload.influencer_id.lower()
+        record = INFLUENCER_STORE.get(lookup_key)
+        if not record:
+            raise HTTPException(status_code=404, detail="Influencer context not found")
+        return record["story"], record["personality"]
+
+    raise HTTPException(status_code=422, detail="Contesto influencer mancante")
+
+
+def _enrich_text_prompt(base_prompt: str, story: str, personality: str) -> str:
+    prompt = base_prompt.strip()
+    context = (
+        f"Storia dell'influencer: {story}\n"
+        f"Personalità e tono: {personality}"
+    )
+    return f"{prompt}\n\n{context}" if prompt else context
+
+
+def _enrich_visual_prompt(base_prompt: str, story: str, personality: str) -> str:
+    prompt = base_prompt.strip()
+    visual_context = (
+        f"Ispirazione narrativa dalla storia: {story}. "
+        f"Tonalità coerente con la personalità: {personality}."
+    )
+    if not prompt:
+        return visual_context
+    return (
+        f"{prompt}. {visual_context}" if not prompt.endswith(".") else f"{prompt} {visual_context}"
+    )
+
+
+def _enrich_video_prompt(base_prompt: str, story: str, personality: str) -> str:
+    prompt = base_prompt.strip()
+    video_context = (
+        f"Sequenza guidata dalla storia: {story}. "
+        f"Atmosfera e voce coerenti con la personalità: {personality}."
+    )
+    if not prompt:
+        return video_context
+    return (
+        f"{prompt}. {video_context}" if not prompt.endswith(".") else f"{prompt} {video_context}"
+    )
+
+
+class InfluencerContext(BaseModel):
+    influencer_id: Optional[str] = Field(
+        None,
+        description="Identificativo univoco dell'influencer registrato nello store",
+    )
+    story: Optional[str] = Field(
+        None,
+        description="Breve storia o background dell'influencer",
+    )
+    personality: Optional[str] = Field(
+        None,
+        description="Personalità e tono caratteristico dell'influencer",
+    )
+
+    @model_validator(mode="after")
+    def validate_context(self) -> "InfluencerContext":
+        has_id = bool(self.influencer_id and self.influencer_id.strip())
+        has_story = bool(self.story and self.story.strip())
+        has_personality = bool(self.personality and self.personality.strip())
+
+        if has_story != has_personality:
+            raise ValueError("story e personality devono essere fornite insieme")
+        if not has_id and not (has_story and has_personality):
+            raise ValueError(
+                "specificare influencer_id oppure fornire story e personality"
+            )
+
+        if has_id:
+            self.influencer_id = self.influencer_id.strip()
+        if has_story:
+            self.story = self.story.strip()
+            self.personality = self.personality.strip()
+        return self
+
+
+class TextGenerationRequest(InfluencerContext):
     model: str = Field(..., description="OpenRouter model identifier")
     prompt: str = Field(..., description="Prompt to send to the model")
 
@@ -31,7 +149,7 @@ class TokenUsageRequest(BaseModel):
     prompt: str = Field(..., description="Prompt to tokenize")
 
 
-class ImageGenerationRequest(BaseModel):
+class ImageGenerationRequest(InfluencerContext):
     model: str
     prompt: str
     negative_prompt: Optional[str] = Field(None, description="Negative prompt")
@@ -41,7 +159,7 @@ class ImageGenerationRequest(BaseModel):
     guidance: Optional[float] = Field(None, ge=0.0, le=50.0)
 
 
-class VideoGenerationRequest(BaseModel):
+class VideoGenerationRequest(InfluencerContext):
     model: str
     prompt: str
     duration: Optional[float] = Field(None, ge=1.0, le=60.0)
@@ -62,6 +180,20 @@ class InfluencerLookupRequest(BaseModel):
     )
 
 
+class InfluencerCreateRequest(BaseModel):
+    identifier: str = Field(..., description="Username or profile URL", min_length=1)
+    story: str = Field(..., description="Background story for the influencer", min_length=1)
+    personality: str = Field(
+        ..., description="Personality traits for the influencer", min_length=1
+    )
+    lora_model: Optional[str] = Field(
+        None, description="Optional LoRA identifier or path associated with the influencer"
+    )
+    contents: Optional[List[str]] = Field(
+        None, description="Optional list of initial content descriptors"
+    )
+
+
 @app.get("/api/models")
 async def list_models(client: OpenRouterClient = Depends(get_client)) -> JSONResponse:
     try:
@@ -78,7 +210,11 @@ async def generate_text(
     client: OpenRouterClient = Depends(get_client),
 ) -> JSONResponse:
     try:
-        result = await client.generate_text(payload.model, payload.prompt)
+        story, personality = _resolve_influencer_context(payload)
+        enriched_prompt = _enrich_text_prompt(payload.prompt, story, personality)
+        result = await client.generate_text(payload.model, enriched_prompt)
+    except HTTPException:
+        raise
     except OpenRouterError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     finally:
@@ -106,15 +242,19 @@ async def generate_image(
     client: OpenRouterClient = Depends(get_client),
 ) -> JSONResponse:
     try:
+        story, personality = _resolve_influencer_context(payload)
+        enriched_prompt = _enrich_visual_prompt(payload.prompt, story, personality)
         data = await client.generate_image(
             model=payload.model,
-            prompt=payload.prompt,
+            prompt=enriched_prompt,
             negative_prompt=payload.negative_prompt,
             width=payload.width,
             height=payload.height,
             steps=payload.steps,
             guidance=payload.guidance,
         )
+    except HTTPException:
+        raise
     except OpenRouterError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     finally:
@@ -153,12 +293,16 @@ async def generate_video(
     client: OpenRouterClient = Depends(get_client),
 ) -> JSONResponse:
     try:
+        story, personality = _resolve_influencer_context(payload)
+        enriched_prompt = _enrich_video_prompt(payload.prompt, story, personality)
         data = await client.generate_video(
             model=payload.model,
-            prompt=payload.prompt,
+            prompt=enriched_prompt,
             duration=payload.duration,
             size=payload.size,
         )
+    except HTTPException:
+        raise
     except OpenRouterError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     finally:
@@ -177,6 +321,94 @@ async def generate_video(
     raise HTTPException(status_code=500, detail="Unsupported video payload")
 
 
+@app.post("/api/influencers", status_code=201)
+async def create_influencer(payload: InfluencerCreateRequest) -> JSONResponse:
+    identifier = payload.identifier.strip()
+    if not identifier:
+        raise HTTPException(status_code=422, detail="Identifier is required")
+
+    story = payload.story.strip()
+    personality = payload.personality.strip()
+    lora_model = payload.lora_model.strip() if payload.lora_model else None
+    contents = payload.contents or None
+    if not story or not personality:
+        raise HTTPException(
+            status_code=422, detail="Story and personality are required"
+        )
+
+    try:
+        record = influencer_store.create(
+            identifier=identifier,
+            story=story,
+            personality=personality,
+            lora_model=lora_model,
+            contents=contents,
+        )
+    except InfluencerAlreadyExistsError as exc:
+        raise HTTPException(status_code=409, detail="Influencer already exists") from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="Impossibile determinare l'handle"
+        ) from exc
+
+    return JSONResponse(
+        status_code=201,
+        content={
+            "handle": record.handle,
+            "identifier": record.identifier,
+            "story": record.story,
+            "personality": record.personality,
+            "created_at": record.created_at.isoformat(),
+            "lora_model": record.lora_model,
+            "contents": record.contents,
+        },
+    )
+
+
+@app.get("/api/influencers/{identifier}")
+async def get_influencer(identifier: str) -> JSONResponse:
+
+    normalized = identifier.strip()
+    if not normalized:
+        raise HTTPException(status_code=422, detail="Identifier is required")
+
+    stored = influencer_store.get(normalized)
+    if not stored:
+        raise HTTPException(status_code=404, detail="Influencer non trovato")
+
+    payload: Dict[str, Any] = {
+        "handle": stored.handle,
+        "identifier": stored.identifier,
+        "story": stored.story,
+        "personality": stored.personality,
+        "created_at": stored.created_at.isoformat(),
+    }
+
+    if stored.lora_model is not None:
+        payload["lora_model"] = stored.lora_model
+    if stored.contents is not None:
+        payload["contents"] = stored.contents
+
+    return JSONResponse(payload)
+
+    record = influencer_store.get(identifier)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Influencer not found")
+
+    return JSONResponse(
+        {
+            "handle": record.handle,
+            "identifier": record.identifier,
+            "story": record.story,
+            "personality": record.personality,
+            "created_at": record.created_at.isoformat(),
+            "lora_model": record.lora_model,
+            "contents": record.contents,
+        }
+    )
+
+
+
 @app.post("/api/influencer")
 async def influencer_lookup(payload: InfluencerLookupRequest) -> JSONResponse:
     identifier = payload.identifier.strip()
@@ -193,9 +425,7 @@ async def influencer_lookup(payload: InfluencerLookupRequest) -> JSONResponse:
     else:
         platform = "Generico"
 
-    handle = identifier.lstrip("@")
-    if "/" in handle:
-        handle = handle.rstrip("/").split("/")[-1]
+    handle = extract_handle(identifier)
 
     if not handle:
         raise HTTPException(status_code=422, detail="Impossibile determinare l'handle")
@@ -203,13 +433,16 @@ async def influencer_lookup(payload: InfluencerLookupRequest) -> JSONResponse:
     if "invalid" in handle.lower():
         raise HTTPException(status_code=404, detail="Influencer non trovato")
 
+    stored = influencer_store.get(handle)
+    display_handle = stored.handle if stored else f"@{handle}"
+
     friendly_name = handle.replace("_", " ").title()
     method_label = (
         "API ufficiali" if payload.method == AcquisitionMethod.OFFICIAL else "Web scraping"
     )
 
     profile: Dict[str, Any] = {
-        "handle": f"@{handle}",
+        "handle": display_handle,
         "nome": friendly_name,
         "piattaforma": platform,
         "fonte_dati": method_label,
@@ -271,6 +504,14 @@ async def influencer_lookup(payload: InfluencerLookupRequest) -> JSONResponse:
         "method": payload.method.value,
         "retrieved_at": datetime.now(timezone.utc).isoformat(),
     }
+
+    if stored:
+        payload_data["story"] = stored.story
+        payload_data["personality"] = stored.personality
+        if stored.lora_model is not None:
+            payload_data["lora_model"] = stored.lora_model
+        if stored.contents is not None:
+            payload_data["contents"] = stored.contents
 
     return JSONResponse(payload_data)
 
