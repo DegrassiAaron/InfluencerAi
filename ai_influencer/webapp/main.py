@@ -19,6 +19,14 @@ from ai_influencer.webapp.openrouter import (
     OpenRouterError,
     summarize_models,
 )
+from ai_influencer.webapp.storage import (
+    create_data,
+    delete_data,
+    get_data,
+    get_storage,
+    list_data,
+    update_data,
+)
 
 app = FastAPI(title="AI Influencer Control Hub")
 
@@ -47,6 +55,62 @@ class VideoGenerationRequest(BaseModel):
     prompt: str
     duration: Optional[float] = Field(None, ge=1.0, le=60.0)
     size: Optional[str] = Field(None, description="Resolution, e.g. 1024x576")
+
+
+class DataItemBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    category: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = Field(None, max_length=1000)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Name must not be empty")
+        return normalized
+
+    @field_validator("category", "description")
+    @classmethod
+    def normalize_optional(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        trimmed = value.strip()
+        return trimmed or None
+
+
+class DataCreateRequest(DataItemBase):
+    pass
+
+
+class DataUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    category: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = Field(None, max_length=1000)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Name must not be empty")
+        return normalized
+
+    @field_validator("category", "description")
+    @classmethod
+    def normalize_optional(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None
+
+    @model_validator(mode="after")
+    def ensure_payload(self) -> "DataUpdateRequest":
+        if not self.model_fields_set:
+            raise ValueError("Provide at least one field to update")
+        return self
 
 
 class AcquisitionMethod(str, Enum):
@@ -121,6 +185,13 @@ async def influencer_view(request: Request) -> HTMLResponse:
 async def settings_view(request: Request) -> HTMLResponse:
     return TEMPLATES.TemplateResponse(
         "settings.html", {"request": request, "active_nav": "settings"}
+    )
+
+
+@app.get("/dati", response_class=HTMLResponse)
+async def data_view(request: Request) -> HTMLResponse:
+    return TEMPLATES.TemplateResponse(
+        "data.html", {"request": request, "active_nav": "data"}
     )
 
 
@@ -346,6 +417,52 @@ async def influencer_lookup(payload: InfluencerLookupRequest) -> JSONResponse:
     }
 
     return JSONResponse(payload_data)
+
+
+@app.get("/api/data")
+async def api_list_data(storage=Depends(get_storage)) -> Dict[str, Any]:
+    return {"items": list_data(storage)}
+
+
+@app.post("/api/data", status_code=201)
+async def api_create_data(
+    payload: DataCreateRequest, storage=Depends(get_storage)
+) -> JSONResponse:
+    try:
+        created = create_data(storage, payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return JSONResponse(created, status_code=201)
+
+
+@app.get("/api/data/{data_id}")
+async def api_get_data(data_id: int, storage=Depends(get_storage)) -> Dict[str, Any]:
+    item = get_data(storage, data_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Data not found")
+    return item
+
+
+@app.put("/api/data/{data_id}")
+async def api_update_data(
+    data_id: int, payload: DataUpdateRequest, storage=Depends(get_storage)
+) -> Dict[str, Any]:
+    data = payload.model_dump(exclude_unset=True)
+    try:
+        updated = update_data(storage, data_id, data)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Data not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return updated
+
+
+@app.delete("/api/data/{data_id}")
+async def api_delete_data(data_id: int, storage=Depends(get_storage)) -> Dict[str, Any]:
+    deleted = delete_data(storage, data_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Data not found")
+    return {"deleted": True}
 
 
 @app.get("/healthz")

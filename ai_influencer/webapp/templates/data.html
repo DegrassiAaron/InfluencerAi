@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gestione dati - AI Control Hub</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="header-bar">
+        <h1>Gestione dati operativi</h1>
+        <nav class="app-nav">
+          <a href="/"{% if active_nav == "home" %} aria-current="page"{% endif %}
+            >Generazione contenuti</a
+          >
+          <a href="/influencer"{% if active_nav == "influencer" %} aria-current="page"{% endif %}
+            >Analisi influencer</a
+          >
+          <a href="/dati"{% if active_nav == "data" %} aria-current="page"{% endif %}
+            >Gestione dati</a
+          >
+          <a href="/settings"{% if active_nav == "settings" %} aria-current="page"{% endif %}
+            >Impostazioni</a
+          >
+        </nav>
+      </div>
+      <p>
+        Centralizza note operative, categorie di contenuto e insight raccolti durante le
+        campagne. Utilizza l'archivio per condividere dati di lavoro con il resto del team.
+      </p>
+    </header>
+
+    <main class="data-layout">
+      <section class="card data-summary">
+        <h2>Archivio</h2>
+        <p class="muted">
+          Raccogli e mantieni aggiornate le informazioni critiche per la gestione delle
+          campagne e dei flussi creativi.
+        </p>
+        <div id="data-empty" class="status-message empty">
+          Nessun dato disponibile. Aggiungi una nuova voce per iniziare.
+        </div>
+        <ul id="data-list" class="data-list" hidden></ul>
+      </section>
+
+      <section class="card data-form-card">
+        <h2>Nuova voce</h2>
+        <form id="data-form" class="form" autocomplete="off">
+          <label>
+            Nome
+            <input type="text" id="data-name" name="name" required maxlength="200" />
+          </label>
+          <label>
+            Categoria
+            <input
+              type="text"
+              id="data-category"
+              name="category"
+              maxlength="100"
+              placeholder="es. Campagna, Analisi, Insight"
+            />
+          </label>
+          <label>
+            Descrizione
+            <textarea
+              id="data-description"
+              name="description"
+              rows="4"
+              maxlength="1000"
+              placeholder="Note operative o riferimenti"
+            ></textarea>
+          </label>
+          <button type="submit">Salva dato</button>
+        </form>
+        <div id="data-form-status" class="status-message empty">
+          Compila il form per creare una nuova voce nell'archivio.
+        </div>
+      </section>
+
+      <section class="card data-editor" hidden>
+        <h2>Modifica voce</h2>
+        <form id="data-edit-form" class="form" autocomplete="off">
+          <input type="hidden" id="edit-id" />
+          <label>
+            Nome
+            <input type="text" id="edit-name" name="name" required maxlength="200" />
+          </label>
+          <label>
+            Categoria
+            <input type="text" id="edit-category" name="category" maxlength="100" />
+          </label>
+          <label>
+            Descrizione
+            <textarea id="edit-description" name="description" rows="4" maxlength="1000"></textarea>
+          </label>
+          <div class="button-row">
+            <button type="submit">Aggiorna</button>
+            <button type="button" id="cancel-edit" class="secondary">Annulla</button>
+          </div>
+        </form>
+        <div id="edit-status" class="status-message empty">
+          Seleziona una voce dall'elenco per modificarla o rimuoverla.
+        </div>
+      </section>
+    </main>
+
+    <script src="/static/data.js" type="module"></script>
+  </body>
+</html>

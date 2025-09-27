@@ -465,6 +465,122 @@ textarea {
   color: #ff7b72;
 }
 
+.data-layout {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  padding: 2rem;
+}
+
+.data-summary {
+  grid-column: span 2;
+}
+
+.data-form-card {
+  grid-column: span 1;
+}
+
+.data-editor {
+  grid-column: span 1;
+}
+
+.data-list {
+  list-style: none;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.data-list li {
+  background: rgba(13, 17, 23, 0.65);
+  border-radius: 12px;
+  border: 1px solid rgba(240, 246, 252, 0.08);
+  padding: 0.9rem 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.data-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.data-item-header strong {
+  font-size: 1rem;
+}
+
+.data-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: rgba(240, 246, 252, 0.65);
+}
+
+.data-item-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.data-item-actions button {
+  background: transparent;
+  color: inherit;
+  border: 1px solid rgba(240, 246, 252, 0.35);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s ease, border 0.2s ease, color 0.2s ease;
+}
+
+.data-item-actions button:hover,
+.data-item-actions button:focus-visible {
+  background: rgba(240, 246, 252, 0.12);
+  border-color: rgba(240, 246, 252, 0.5);
+  outline: none;
+}
+
+.data-tag {
+  background: rgba(88, 166, 255, 0.18);
+  color: #58a6ff;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.button-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+button.secondary {
+  background: transparent;
+  color: inherit;
+  border: 1px solid rgba(240, 246, 252, 0.35);
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s ease, border 0.2s ease, color 0.2s ease;
+}
+
+button.secondary:hover,
+button.secondary:focus-visible {
+  background: rgba(240, 246, 252, 0.12);
+  border-color: rgba(240, 246, 252, 0.5);
+  outline: none;
+}
+
+.muted {
+  color: rgba(240, 246, 252, 0.7);
+}
+
 .settings-layout {
   max-width: 720px;
   margin: 0 auto;
@@ -539,5 +655,11 @@ textarea {
 
   .generators {
     order: 1;
+  }
+
+  .data-summary,
+  .data-form-card,
+  .data-editor {
+    grid-column: span 1;
   }
 }
