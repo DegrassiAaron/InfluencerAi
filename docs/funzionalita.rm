@@ -1,0 +1,76 @@
+# Control Hub API – Dettaglio funzionalità
+
+Questa panoramica descrive nel dettaglio gli endpoint esposti da `ai_influencer/webapp/main.py`, includendo campi obbligatori, opzionali e struttura delle risposte.
+
+## GET /api/models
+- **Descrizione:** restituisce i modelli OpenRouter disponibili con una rappresentazione compatta per l'interfaccia.
+- **Request body:** nessuno.
+- **Response:**
+  - `models` (array): elenco dei modelli.
+    - `id` (string)
+    - `name` (string)
+    - `provider` (string)
+    - `capabilities` (array di string)
+    - `context_length` (number \| null)
+    - `pricing` (object): payload originale OpenRouter.
+    - `pricing_display` (string \| null): prezzo sintetico se ricavabile.
+
+## POST /api/generate/text
+- **Descrizione:** esegue una chat completion OpenRouter e restituisce il testo prodotto.
+- **Request body (JSON):**
+  - `model` (string, obbligatorio)
+  - `prompt` (string, obbligatorio)
+- **Response:**
+  - `content` (string): testo completo generato dal modello.
+
+## POST /api/generate/image
+- **Descrizione:** invia una richiesta di generazione immagine.
+- **Request body (JSON):**
+  - `model` (string, obbligatorio)
+  - `prompt` (string, obbligatorio)
+  - `negative_prompt` (string, opzionale)
+  - `width` (integer, obbligatorio; range 256–2048)
+  - `height` (integer, obbligatorio; range 256–2048)
+  - `steps` (integer, opzionale; range 1–100)
+  - `guidance` (float, opzionale; range 0–50)
+- **Response:**
+  - `image` (string): contenuto base64 o URL remoto del media generato.
+  - `is_remote` (boolean): indica se `image` è un URL remoto (`true`) oppure un blob inline (`false`).
+
+## POST /api/generate/video
+- **Descrizione:** esegue la generazione di un breve video.
+- **Request body (JSON):**
+  - `model` (string, obbligatorio)
+  - `prompt` (string, obbligatorio)
+  - `duration` (number, opzionale; range 1–60 secondi)
+  - `size` (string, opzionale; es. `1024x576`)
+- **Response:**
+  - `video` (string): base64 inline o URL remoto.
+  - `is_remote` (boolean): `true` se la risorsa è fornita come URL.
+
+## POST /api/influencer
+- **Descrizione:** simula la raccolta di insight per un profilo social.
+- **Request body (JSON):**
+  - `identifier` (string, obbligatorio): handle o URL.
+  - `method` (string, opzionale; valori ammessi `official`, `scrape`; default `official`).
+- **Response:**
+  - `profile` (object):
+    - `handle` (string)
+    - `nome` (string)
+    - `piattaforma` (string)
+    - `fonte_dati` (string)
+  - `metrics` (object):
+    - `follower` (integer)
+    - `engagement_rate` (string)
+    - `crescita_30g` (string)
+    - `media_view` (integer)
+  - `media` (array di object): ciascun item include `id`, `titolo`, `tipo`, `testo_post`, `image_url`, `image_base64`, `thumbnail_url`, `success_score`, `original_url`, `pubblicato_il`, `transcript` (null per i post immagine).
+  - `identifier` (string): handle normalizzato.
+  - `method` (string): valore effettivo (`official` o `scrape`).
+  - `retrieved_at` (string, ISO 8601): timestamp della simulazione.
+
+## GET /healthz
+- **Descrizione:** health check minimale.
+- **Request body:** nessuno.
+- **Response:**
+  - `status` (string): valore fisso `"ok"`.
