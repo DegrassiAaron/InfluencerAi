@@ -89,8 +89,13 @@ def update_record(
         (name, value, timestamp, record_id),
     )
     if cursor.rowcount == 0:
-        connection.rollback()
-        raise KeyError(record_id)
+        try:
+            _fetch_record(connection, record_id)
+        except KeyError:
+            connection.rollback()
+            raise
+        connection.commit()
+        return _fetch_record(connection, record_id)
     connection.commit()
     return _fetch_record(connection, record_id)
 
