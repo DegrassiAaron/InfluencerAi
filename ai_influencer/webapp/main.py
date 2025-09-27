@@ -10,6 +10,11 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
+from ai_influencer.webapp.influencers import (
+    InfluencerAlreadyExistsError,
+    extract_handle,
+    get_influencer_store,
+)
 from ai_influencer.webapp.openrouter import (
     OpenRouterClient,
     OpenRouterError,
@@ -41,6 +46,7 @@ INFLUENCER_STORE: Dict[str, Dict[str, str]] = {
 
 
 app = FastAPI(title="AI Influencer Control Hub")
+influencer_store = get_influencer_store()
 
 
 async def get_client() -> OpenRouterClient:
@@ -174,6 +180,14 @@ class InfluencerLookupRequest(BaseModel):
     )
 
 
+class InfluencerCreateRequest(BaseModel):
+    identifier: str = Field(..., description="Username or profile URL", min_length=1)
+    story: str = Field(..., description="Background story for the influencer", min_length=1)
+    personality: str = Field(
+        ..., description="Personality traits for the influencer", min_length=1
+    )
+
+
 @app.get("/api/models")
 async def list_models(client: OpenRouterClient = Depends(get_client)) -> JSONResponse:
     try:
@@ -301,6 +315,44 @@ async def generate_video(
     raise HTTPException(status_code=500, detail="Unsupported video payload")
 
 
+@app.post("/api/influencers", status_code=201)
+async def create_influencer(payload: InfluencerCreateRequest) -> JSONResponse:
+    identifier = payload.identifier.strip()
+    if not identifier:
+        raise HTTPException(status_code=422, detail="Identifier is required")
+
+    story = payload.story.strip()
+    personality = payload.personality.strip()
+    if not story or not personality:
+        raise HTTPException(
+            status_code=422, detail="Story and personality are required"
+        )
+
+    try:
+        record = influencer_store.create(
+            identifier=identifier,
+            story=story,
+            personality=personality,
+        )
+    except InfluencerAlreadyExistsError as exc:
+        raise HTTPException(status_code=409, detail="Influencer already exists") from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="Impossibile determinare l'handle"
+        ) from exc
+
+    return JSONResponse(
+        status_code=201,
+        content={
+            "handle": record.handle,
+            "identifier": record.identifier,
+            "story": record.story,
+            "personality": record.personality,
+            "created_at": record.created_at.isoformat(),
+        },
+    )
+
+
 @app.post("/api/influencer")
 async def influencer_lookup(payload: InfluencerLookupRequest) -> JSONResponse:
     identifier = payload.identifier.strip()
@@ -317,9 +369,7 @@ async def influencer_lookup(payload: InfluencerLookupRequest) -> JSONResponse:
     else:
         platform = "Generico"
 
-    handle = identifier.lstrip("@")
-    if "/" in handle:
-        handle = handle.rstrip("/").split("/")[-1]
+    handle = extract_handle(identifier)
 
     if not handle:
         raise HTTPException(status_code=422, detail="Impossibile determinare l'handle")
@@ -327,13 +377,16 @@ async def influencer_lookup(payload: InfluencerLookupRequest) -> JSONResponse:
     if "invalid" in handle.lower():
         raise HTTPException(status_code=404, detail="Influencer non trovato")
 
+    stored = influencer_store.get(handle)
+    display_handle = stored.handle if stored else f"@{handle}"
+
     friendly_name = handle.replace("_", " ").title()
     method_label = (
         "API ufficiali" if payload.method == AcquisitionMethod.OFFICIAL else "Web scraping"
     )
 
     profile: Dict[str, Any] = {
-        "handle": f"@{handle}",
+        "handle": display_handle,
         "nome": friendly_name,
         "piattaforma": platform,
         "fonte_dati": method_label,
@@ -395,6 +448,10 @@ async def influencer_lookup(payload: InfluencerLookupRequest) -> JSONResponse:
         "method": payload.method.value,
         "retrieved_at": datetime.now(timezone.utc).isoformat(),
     }
+
+    if stored:
+        payload_data["story"] = stored.story
+        payload_data["personality"] = stored.personality
 
     return JSONResponse(payload_data)
 

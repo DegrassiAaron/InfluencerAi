@@ -11,6 +11,9 @@ from fastapi.testclient import TestClient
 import pytest
 
 from ai_influencer.webapp.main import INFLUENCER_STORE, app, get_client
+
+from ai_influencer.webapp.influencers import get_influencer_store
+
 from ai_influencer.webapp.openrouter import OpenRouterError, summarize_models
 
 
@@ -329,6 +332,39 @@ def test_generate_image_enriches_prompt_with_store_context():
     context = INFLUENCER_STORE["aurora_rise"]
     assert context["story"] in prompt
     assert context["personality"] in prompt
+
+
+def test_create_influencer_persists_story_and_personality() -> None:
+    store = get_influencer_store()
+    store.clear()
+    try:
+        response = client.post(
+            "/api/influencers",
+            json={
+                "identifier": "@socialstar",
+                "story": "From humble beginnings to viral sensation.",
+                "personality": "Charismatic and witty",
+            },
+        )
+
+        assert response.status_code == 201
+        created = response.json()
+        assert created["handle"] == "@socialstar"
+        assert created["story"] == "From humble beginnings to viral sensation."
+        assert created["personality"] == "Charismatic and witty"
+
+        lookup = client.post(
+            "/api/influencer",
+            json={"identifier": "@socialstar", "method": "official"},
+        )
+
+        assert lookup.status_code == 200
+        payload = lookup.json()
+        assert payload["story"] == "From humble beginnings to viral sensation."
+        assert payload["personality"] == "Charismatic and witty"
+        assert payload["profile"]["handle"] == "@socialstar"
+    finally:
+        store.clear()
 
 
 def test_influencer_lookup_returns_enriched_media():
