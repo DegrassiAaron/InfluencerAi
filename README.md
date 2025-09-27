@@ -26,7 +26,7 @@ Il progetto **Influencer AI** fornisce un flusso end-to-end per costruire una pe
 
 - stack Docker ottimizzato per GPU NVIDIA con servizi "tools" (Python utility), "comfyui" e "kohya" per l'addestramento;
 - script Python per la preparazione del dataset, la generazione tramite OpenRouter e la creazione di caption augmentate;
-- una webapp FastAPI per consultare i modelli OpenRouter, lanciare generazioni testo/immagine/video e simulare l'analisi dei profili social;
+- un servizio FastAPI che espone API REST (documentate via Swagger) per consultare i modelli OpenRouter, lanciare generazioni testo/immagine/video e simulare l'analisi dei profili social;
 - automazioni opzionali (GUI desktop e workflow n8n) per orchestrare l'intero ciclo.
 
 ## Architettura del repository
@@ -37,7 +37,7 @@ Il progetto **Influencer AI** fornisce un flusso end-to-end per costruire una pe
   - `qc_face_sim.py` per filtrare il dataset tramite similarità facciale e nitidezza;
   - `augment_and_caption.py` per augment e generazione caption coerenti con i metadati;
   - `train_lora.sh` per avviare `sd-scripts` all'interno del container `kohya`.
-- `ai_influencer/webapp/` – applicazione FastAPI + frontend vanilla JS che espone endpoint `/api/models`, `/api/generate/*` e `/api/influencer` per pilotare i servizi OpenRouter e raccogliere insight.
+- `ai_influencer/webapp/` – applicazione FastAPI che espone endpoint REST (`/api/models`, `/api/generate/*`, `/api/influencer`, `/api/services/*`) e genera automaticamente la documentazione interattiva Swagger su `/docs`.
 - `ai_influencer/scripts/gui_app.py` – interfaccia Tkinter che incapsula i principali step della pipeline CLI.
 - `ai_influencer/n8n/flow.json` – workflow n8n che esegue gli script chiave via webhook Docker.
 - `tests/` – suite Pytest che copre l'SDK OpenRouter asincrono e gli endpoint principali della webapp.
@@ -171,13 +171,59 @@ Se non specifichi nulla verrà usato `/workspace/models/base/sdxl.safetensors`. 
 > 💡 Smoke test rapido: esegui `bash /workspace/scripts/train_lora.sh --base-model /workspace/models/base/sdxl.safetensors` e verifica nei log la riga `[train_lora] Modello base selezionato: ...` per assicurarti che il parametro venga propagato correttamente.
 
 ## Control Hub web
-Il servizio `ai_influencer_webapp` espone un pannello su [http://localhost:8000](http://localhost:8000) per:
-- consultare i modelli OpenRouter filtrabili per capacità (testo/immagine/video);
-- inviare prompt testuali, visualizzare immagini inline (base64) o scaricare asset remoti;
-- lanciare generazioni video e ottenere URL/base64 pronti all'uso;
-- simulare la raccolta di insight su un influencer (profilo, metriche, top media) attraverso l'endpoint `/api/influencer`.
+Il servizio `ai_influencer_webapp` fornisce un **Control Hub API-first** su [http://localhost:8000](http://localhost:8000). Tutte le interazioni avvengono via endpoint REST; l'interfaccia HTML è stata rimossa a favore della documentazione interattiva generata automaticamente.
 
-La webapp è implementata con FastAPI (`ai_influencer/webapp/main.py`) e utilizza `ai_influencer/webapp/openrouter.py` come client asincrono con caching dei modelli e gestione errori.
+### Swagger / OpenAPI
+- Avvia lo stack Docker (`docker compose -f ai_influencer/docker/docker-compose.yaml up -d`).
+- Apri <http://localhost:8000/docs> per accedere alla pagina Swagger auto-generata da FastAPI.
+- Da qui puoi testare ogni endpoint direttamente dal browser, consultare gli schemi dei payload e verificare le risposte attese.
+
+### Esempi di richieste API
+I seguenti esempi assumono che la variabile `OPENROUTER_API_KEY` sia configurata nel container `ai_influencer_webapp` (tramite `.env` o variabili d'ambiente Docker).
+
+- **Elenco modelli disponibili (GET `/api/models`)**
+  ```bash
+  curl http://localhost:8000/api/models | jq '.[0]'
+  ```
+  La risposta contiene metadati sui modelli OpenRouter (nome, tipo di media supportato, provider).
+
+- **Generazione di testo (POST `/api/generate/text`)**
+  ```bash
+  curl -X POST http://localhost:8000/api/generate/text \
+    -H 'Content-Type: application/json' \
+    -d '{
+      "model": "meta-llama/llama-3.1-70b-instruct",
+      "prompt": "Scrivi una caption Instagram per il lancio di un nuovo prodotto skincare."
+    }'
+  ```
+  L'API risponde con il testo generato dal modello selezionato (campo `content`).
+
+- **Generazione di immagini (POST `/api/generate/image`)**
+  ```bash
+  curl -X POST http://localhost:8000/api/generate/image \
+    -H 'Content-Type: application/json' \
+    -d '{
+      "model": "stabilityai/sdxl",
+      "prompt": "ritratto fotografico di un influencer immerso nella luce dorata del tramonto",
+      "negative_prompt": "sfocato, distorsioni",
+      "width": 1024,
+      "height": 1024
+    }'
+  ```
+  L'output include i dati dell'immagine codificati in Base64 e gli eventuali URL remoti.
+
+- **Insight su un profilo (POST `/api/influencer`)**
+  ```bash
+  curl -X POST http://localhost:8000/api/influencer \
+    -H 'Content-Type: application/json' \
+    -d '{
+      "identifier": "@influencer_demo",
+      "method": "official"
+    }'
+  ```
+  La risposta restituisce un payload JSON con profilo, metriche e top media simulati.
+
+FastAPI (`ai_influencer/webapp/main.py`) utilizza `ai_influencer/webapp/openrouter.py` come client asincrono con caching dei modelli e gestione errori per orchestrare le chiamate verso OpenRouter.
 
 ## Struttura delle cartelle dati
 ```
