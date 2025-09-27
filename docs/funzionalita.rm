@@ -24,6 +24,17 @@ Questa panoramica descrive nel dettaglio gli endpoint esposti da `ai_influencer/
 - **Response:**
   - `content` (string): testo completo generato dal modello.
 
+## POST /api/tokenize
+- **Descrizione:** calcola il numero di token che verrebbero consumati da un prompt con un determinato modello OpenRouter.
+- **Request body (JSON):**
+  - `model` (string, obbligatorio)
+  - `prompt` (string, obbligatorio)
+- **Response:**
+  - `usage` (object):
+    - `prompt_tokens` (integer)
+    - `completion_tokens` (integer)
+    - `total_tokens` (integer)
+
 ## POST /api/generate/image
 - **Descrizione:** invia una richiesta di generazione immagine.
 - **Request body (JSON):**
