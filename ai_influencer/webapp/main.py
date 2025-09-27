@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import (
     AliasChoices,
@@ -19,7 +19,6 @@ from pydantic import (
     model_validator,
 )
 
-from ai_influencer.webapp import storage
 from ai_influencer.webapp.openrouter import (
     OpenRouterClient,
     OpenRouterError,
@@ -31,19 +30,6 @@ app = FastAPI(title="AI Influencer Control Hub")
 
 async def get_client() -> OpenRouterClient:
     return OpenRouterClient()
-
-
-def get_storage():
-    try:
-        connection = storage.create_connection()
-    except storage.StorageError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    try:
-        yield connection
-    finally:
-        connection.close()
-
-
 class TextGenerationRequest(BaseModel):
     model: str = Field(..., description="OpenRouter model identifier")
     prompt: str = Field(..., description="Prompt to send to the model")
@@ -64,19 +50,6 @@ class VideoGenerationRequest(BaseModel):
     prompt: str
     duration: Optional[float] = Field(None, ge=1.0, le=60.0)
     size: Optional[str] = Field(None, description="Resolution, e.g. 1024x576")
-
-
-class DataRecordPayload(BaseModel):
-    name: str = Field(..., description="Nome del record", min_length=1, max_length=255)
-    value: str = Field(..., description="Valore associato", min_length=1)
-
-    @field_validator("name", "value")
-    @classmethod
-    def _strip_value(cls, raw: str) -> str:
-        cleaned = raw.strip()
-        if not cleaned:
-            raise ValueError("Il campo non può essere vuoto")
-        return cleaned
 
 
 class AcquisitionMethod(str, Enum):
@@ -364,51 +337,6 @@ async def get_openrouter_config() -> Dict[str, Any]:
 async def update_openrouter_config(payload: ServiceUpdateRequest) -> Dict[str, Any]:
     service = _get_service_or_404("openrouter")
     return _legacy_openrouter_payload(service.update(payload))
-
-
-
-@app.get("/api/data")
-def list_data_records(connection=Depends(get_storage)) -> Dict[str, Any]:
-    records = storage.list_records(connection)
-    return {"items": records}
-
-
-@app.post("/api/data", status_code=status.HTTP_201_CREATED)
-def create_data_record(
-    payload: DataRecordPayload, connection=Depends(get_storage)
-) -> Dict[str, Any]:
-    record = storage.update_record(
-        connection,
-        name=payload.name,
-        value=payload.value,
-    )
-    return {"record": record}
-
-
-@app.put("/api/data/{record_id}")
-def update_data_record(
-    record_id: int, payload: DataRecordPayload, connection=Depends(get_storage)
-) -> Dict[str, Any]:
-    try:
-        record = storage.update_record(
-            connection,
-            record_id=record_id,
-            name=payload.name,
-            value=payload.value,
-        )
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Record not found") from exc
-    return {"record": record}
-
-
-@app.delete("/api/data/{record_id}")
-def delete_data_record(record_id: int, connection=Depends(get_storage)) -> Dict[str, Any]:
-    try:
-        storage.delete_record(connection, record_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Record not found") from exc
-    return {"deleted": True}
-
 
 @app.post("/api/generate/text")
 async def generate_text(
