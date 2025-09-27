@@ -26,57 +26,82 @@
         </nav>
       </div>
       <p>
-        Gestisci la chiave API e l'endpoint di OpenRouter utilizzati dall'applicazione.
+        Gestisci le integrazioni con i servizi esterni utilizzati dall'applicazione.
         Le modifiche vengono salvate immediatamente nell'ambiente di esecuzione.
       </p>
     </header>
 
     <main class="settings-layout">
       <section class="card settings-card">
-        <h2>Configurazione OpenRouter</h2>
+        <h2>Servizi esterni</h2>
         <p class="settings-description">
-          Inserisci la chiave API fornita da OpenRouter e, se necessario, un endpoint
-          personalizzato. La chiave viene mostrata in forma mascherata dopo il salvataggio.
+          Consulta e aggiorna la configurazione dei servizi supportati. Le chiavi API
+          vengono memorizzate nell'ambiente di esecuzione e mostrate solo in forma
+          mascherata. Gli endpoint personalizzati sono facoltativi.
         </p>
-        <div id="config-status" class="status-message empty">
-          Nessuna chiave configurata.
+        <div class="table-wrapper">
+          <table class="settings-table" id="services-table">
+            <thead>
+              <tr>
+                <th scope="col">Servizio</th>
+                <th scope="col">Endpoint</th>
+                <th scope="col">Chiave</th>
+                <th scope="col" class="actions">Azioni</th>
+              </tr>
+            </thead>
+            <tbody id="services-table-body">
+              <tr class="empty">
+                <td colspan="4">Caricamento servizi...</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <form id="openrouter-form" class="form settings-form" autocomplete="off">
-          <label>
-            Chiave API
-            <input
-              type="password"
-              id="openrouter-api-key"
-              name="api_key"
-              placeholder="sk-..."
-              autocomplete="off"
-            />
-            <span class="input-hint">
-              Il valore inviato sovrascrive quello attualmente configurato.
-            </span>
-          </label>
-          <label>
-            Endpoint personalizzato (facoltativo)
-            <input
-              type="url"
-              id="openrouter-base-url"
-              name="base_url"
-              placeholder="https://openrouter.ai/api/v1"
-              autocomplete="off"
-            />
-            <span class="input-hint">
-              Lascia vuoto per mantenere l'endpoint predefinito di OpenRouter.
-            </span>
-          </label>
-          <div class="settings-actions">
-            <button type="submit">Salva configurazione</button>
-            <button type="button" id="clear-settings" class="button-secondary">
-              Pulisci form
-            </button>
-          </div>
-        </form>
       </section>
     </main>
+
+    <dialog id="service-dialog" class="settings-dialog">
+      <form
+        id="service-form"
+        class="form settings-form"
+        method="dialog"
+        autocomplete="off"
+      >
+        <h3 id="service-dialog-title">Modifica servizio</h3>
+        <input type="hidden" id="service-id" name="service_id" />
+        <p id="service-env-hint" class="input-hint"></p>
+        <label>
+          Chiave API
+          <input
+            type="password"
+            id="service-api-key"
+            name="api_key"
+            placeholder="sk-..."
+            autocomplete="off"
+          />
+          <span class="input-hint">
+            Inserisci una nuova chiave per sostituire quella esistente.
+          </span>
+        </label>
+        <label>
+          Endpoint personalizzato (facoltativo)
+          <input
+            type="url"
+            id="service-endpoint"
+            name="endpoint"
+            autocomplete="off"
+          />
+          <span class="input-hint">
+            Lascia vuoto per utilizzare l'endpoint predefinito del servizio.
+          </span>
+        </label>
+        <div class="settings-actions">
+          <button type="submit">Salva</button>
+          <button type="button" id="service-cancel" class="button-secondary">
+            Annulla
+          </button>
+        </div>
+      </form>
+    </dialog>
 
     <script src="/static/settings.js" type="module"></script>
   </body>
