@@ -19,6 +19,34 @@ from ai_influencer.webapp.openrouter import OpenRouterError, summarize_models
 client = TestClient(app, raise_server_exceptions=False)
 
 
+def test_homepage_renders_index_template():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'href="/" aria-current="page"' in response.text
+
+
+def test_influencer_page_renders_influencer_template():
+    response = client.get("/influencer")
+
+    assert response.status_code == 200
+    assert 'href="/influencer" aria-current="page"' in response.text
+
+
+def test_settings_page_renders_settings_template():
+    response = client.get("/settings")
+
+    assert response.status_code == 200
+    assert 'href="/settings" aria-current="page"' in response.text
+
+
+def test_healthcheck_returns_ok_payload():
+    response = client.get("/healthz")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 @pytest.fixture()
 def temp_data_db(tmp_path, monkeypatch):
     db_path = tmp_path / "data.sqlite"
