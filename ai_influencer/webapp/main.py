@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import base64
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -117,9 +117,6 @@ class ServiceUpdateRequest(BaseModel):
         description="Override service base URL",
         validation_alias=AliasChoices("base_url", "endpoint"),
     )
-    base_url: Optional[AnyHttpUrl] = Field(
-        default=None, description="Override service base URL"
-    )
 
     @field_validator("api_key", mode="before")
     @classmethod
@@ -144,31 +141,12 @@ class ServiceUpdateRequest(BaseModel):
             return value
         return value
 
-    @field_validator("base_url", mode="before")
-    @classmethod
-    def _normalize_base_url(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        if isinstance(value, str):
-            value = value.strip()
-            if not value:
-                return None
-            return value
-        return value
-
     @model_validator(mode="after")
     def _ensure_payload(self) -> "ServiceUpdateRequest":
-
-        api_key_provided = "api_key" in self.model_fields_set
-        base_url_provided = "base_url" in self.model_fields_set
-
-
-        endpoint_provided = "endpoint" in self.model_fields_set
-        base_url_provided = "base_url" in self.model_fields_set
-
-        if not any([api_key_provided, endpoint_provided, base_url_provided]):
+        payload = self.model_dump(exclude_unset=True)
+        if not payload:
             raise ValueError("Provide at least one value to update")
-        if api_key_provided and self.api_key is None:
+        if "api_key" in payload and self.api_key is None:
             raise ValueError("API key must not be empty")
         return self
 
@@ -183,6 +161,7 @@ class ServiceDefinition:
     api_key_env: Optional[str] = None
     base_url_env: Optional[str] = None
     default_base_url: Optional[str] = None
+    extra_env: Dict[str, str] = field(default_factory=dict)
 
     def _current_api_key(self) -> Optional[str]:
         return os.environ.get(self.api_key_env) if self.api_key_env else None
@@ -217,6 +196,8 @@ class ServiceDefinition:
             payload["environment"][self.base_url_env] = (
                 base_url_override if base_url_override is not None else self.default_base_url
             )
+        for env_name in self.extra_env.values():
+            payload["environment"][env_name] = bool(os.environ.get(env_name))
         if updated is not None:
             payload["updated"] = updated
         return payload
@@ -230,6 +211,8 @@ class ServiceDefinition:
             env_keys["api_key"] = self.api_key_env
         if self.base_url_env:
             env_keys["endpoint"] = self.base_url_env
+        if self.extra_env:
+            env_keys.update(self.extra_env)
 
         return {
             "id": self.name,
@@ -244,12 +227,17 @@ class ServiceDefinition:
 
     def update(self, update: ServiceUpdateRequest) -> Dict[str, Any]:
         updated: Dict[str, Any] = {}
-        if update.api_key is not None and self.api_key_env:
-            os.environ[self.api_key_env] = update.api_key
+        data = update.model_dump(exclude_unset=True)
+
+        if "api_key" in data:
+            if not self.api_key_env:
+                raise HTTPException(
+                    status_code=400, detail="Service does not accept API keys"
+                )
+            os.environ[self.api_key_env] = update.api_key  # type: ignore[arg-type]
             updated["api_key"] = True
 
-        base_url_provided = "base_url" in update.model_fields_set
-        if base_url_provided:
+        if "base_url" in data:
             if self.base_url_env is None:
                 raise HTTPException(
                     status_code=400, detail="Service does not accept endpoint overrides"
@@ -273,7 +261,40 @@ SERVICE_REGISTRY: Dict[str, ServiceDefinition] = {
         api_key_env="OPENROUTER_API_KEY",
         base_url_env="OPENROUTER_BASE_URL",
         default_base_url="https://openrouter.ai/api/v1",
-    )
+    ),
+    "youtube": ServiceDefinition(
+        name="youtube",
+        display_name="YouTube Data API v3",
+        api_key_env="YOUTUBE_API_KEY",
+        base_url_env="YOUTUBE_API_BASE_URL",
+        default_base_url="https://www.googleapis.com/youtube/v3",
+    ),
+    "instagram": ServiceDefinition(
+        name="instagram",
+        display_name="Instagram Graph API",
+        api_key_env="IG_SYSTEM_USER_TOKEN",
+        base_url_env="IG_GRAPH_API_BASE_URL",
+        default_base_url="https://graph.facebook.com/v19.0",
+        extra_env={
+            "app_id": "FB_APP_ID",
+            "app_secret": "FB_APP_SECRET",
+        },
+    ),
+    "x": ServiceDefinition(
+        name="x",
+        display_name="X API v2",
+        api_key_env="X_BEARER_TOKEN",
+        base_url_env="X_API_BASE_URL",
+        default_base_url="https://api.x.com/2",
+    ),
+    "tiktok": ServiceDefinition(
+        name="tiktok",
+        display_name="TikTok API v2",
+        api_key_env="TIKTOK_CLIENT_SECRET",
+        base_url_env="TIKTOK_API_BASE_URL",
+        default_base_url="https://open.tiktokapis.com/v2",
+        extra_env={"client_id": "TIKTOK_CLIENT_ID"},
+    ),
 }
 
 
